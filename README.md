@@ -105,6 +105,13 @@ Docker:
 docker build -t reglens . && docker run -p 8000:8000 --env-file .env reglens
 ```
 
+Hosted demo (Hugging Face Docker Space; retrieval works without keys, answering needs a model secret):
+
+```bash
+hf auth login
+python scripts/deploy_space.py <hf-username>/reglens
+```
+
 ## Layout
 
 ```

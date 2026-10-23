@@ -6,11 +6,27 @@ from reglens.graph import build_pipeline
 from reglens.retrieval import BM25, Dense, Hit, LocalHybrid, rrf
 from reglens.verify import check_claims
 
-A = Chunk("a", "1005", "1005.11", "rule", "12 CFR 1005.11(c)(1)", "§ 1005.11", "",
-          "A financial institution shall investigate promptly and determine whether an error occurred "
-          "within 10 business days of receiving a notice of error.")
-B = Chunk("b", "1005", "1005.6", "rule", "12 CFR 1005.6(b)(1)", "§ 1005.6", "",
-          "If the consumer notifies the financial institution within two business days, liability is limited to $50.")
+A = Chunk(
+    "a",
+    "1005",
+    "1005.11",
+    "rule",
+    "12 CFR 1005.11(c)(1)",
+    "§ 1005.11",
+    "",
+    "A financial institution shall investigate promptly and determine whether an error occurred "
+    "within 10 business days of receiving a notice of error.",
+)
+B = Chunk(
+    "b",
+    "1005",
+    "1005.6",
+    "rule",
+    "12 CFR 1005.6(b)(1)",
+    "§ 1005.6",
+    "",
+    "If the consumer notifies the financial institution within two business days, liability is limited to $50.",
+)
 CORPUS = {"a": A, "b": B}
 
 
@@ -24,12 +40,16 @@ def test_verifier_accepts_exact_quote_with_normalized_whitespace_and_case():
 
 
 def test_verifier_rejects_paraphrase_unseen_passage_fake_id_and_short_quote():
-    checks = check_claims([
-        claim("a", "must finish the investigation in ten business days"),  # paraphrase
-        claim("b", "liability is limited to $50 when reported in time"),    # real passage, not retrieved
-        claim("zzz", "anything at all that is long enough to count"),       # invented id
-        claim("a", "10 business days"),                                     # too short
-    ], {"a": A}, CORPUS)
+    checks = check_claims(
+        [
+            claim("a", "must finish the investigation in ten business days"),  # paraphrase
+            claim("b", "liability is limited to $50 when reported in time"),  # real passage, not retrieved
+            claim("zzz", "anything at all that is long enough to count"),  # invented id
+            claim("a", "10 business days"),  # too short
+        ],
+        {"a": A},
+        CORPUS,
+    )
     assert [c.reason for c in checks] == ["quote_not_in_source", "not_retrieved", "unknown_chunk", "quote_too_short"]
 
 
@@ -59,6 +79,7 @@ def _pipeline(answers, verify=True):
 
         def search(self, q, k=8):
             return [Hit(A, 1.0, {})]
+
     gen = ScriptedGenerator(answers)
     return build_pipeline(Fixed(), gen, CORPUS, verify=verify), gen
 

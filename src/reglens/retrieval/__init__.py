@@ -20,7 +20,43 @@ import numpy as np
 from reglens.corpus.chunk import Chunk
 
 TOKEN = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?")
-STOP = frozenset(["a", "an", "the", "of", "to", "in", "for", "on", "or", "and", "is", "are", "be", "by", "with", "as", "at", "that", "this", "which", "any", "from", "its", "it", "may", "shall", "not", "if", "under", "such", "than", "other", "must"])
+STOP = frozenset(
+    [
+        "a",
+        "an",
+        "the",
+        "of",
+        "to",
+        "in",
+        "for",
+        "on",
+        "or",
+        "and",
+        "is",
+        "are",
+        "be",
+        "by",
+        "with",
+        "as",
+        "at",
+        "that",
+        "this",
+        "which",
+        "any",
+        "from",
+        "its",
+        "it",
+        "may",
+        "shall",
+        "not",
+        "if",
+        "under",
+        "such",
+        "than",
+        "other",
+        "must",
+    ]
+)
 
 
 def tokenize(text: str) -> list[str]:
@@ -66,7 +102,12 @@ class BM25:
             for t in q:
                 tf = d.get(t)
                 if tf:
-                    s += self.idf[t] * tf * (self.k1 + 1) / (tf + self.k1 * (1 - self.b + self.b * self.lens[i] / self.avg))
+                    s += (
+                        self.idf[t]
+                        * tf
+                        * (self.k1 + 1)
+                        / (tf + self.k1 * (1 - self.b + self.b * self.lens[i] / self.avg))
+                    )
             out[i] = s
         return out
 

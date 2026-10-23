@@ -54,6 +54,13 @@ def check_claims(claims: list[dict], retrieved: dict[str, Chunk], corpus: dict[s
 def feedback(checks: list[ClaimCheck]) -> str:
     """Model-facing correction message: says which claims failed and why, never what the answer is."""
     bad = [f"- claim citing {c.chunk_id!r}: {c.reason}" for c in checks if not c.verified]
-    return ("These claims failed verification:\n" + "\n".join(bad) +
-            "\nRe-answer using only the passages provided. Copy quotes exactly from the cited passage. "
-            "Drop any claim you cannot support with an exact quote.") if bad else ""
+    return (
+        (
+            "These claims failed verification:\n"
+            + "\n".join(bad)
+            + "\nRe-answer using only the passages provided. Copy quotes exactly from the cited passage. "
+            "Drop any claim you cannot support with an exact quote."
+        )
+        if bad
+        else ""
+    )

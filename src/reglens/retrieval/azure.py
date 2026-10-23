@@ -32,8 +32,9 @@ from reglens.retrieval import Hit
 
 class AzureEmbedder:
     def __init__(self, s: AzureOpenAISettings, batch: int = 64):
-        self.client = AzureOpenAI(azure_endpoint=s.endpoint, api_key=s.api_key, api_version=s.api_version,
-                                  max_retries=5)
+        self.client = AzureOpenAI(
+            azure_endpoint=s.endpoint, api_key=s.api_key, api_version=s.api_version, max_retries=5
+        )
         self.deployment, self.batch = s.embedding_deployment, batch
         self.name = f"azure:{s.embedding_deployment}"
         self.tokens_used = 0
@@ -41,7 +42,7 @@ class AzureEmbedder:
     def embed(self, texts: list[str]) -> np.ndarray:
         out: list[list[float]] = []
         for i in range(0, len(texts), self.batch):
-            resp = self.client.embeddings.create(model=self.deployment, input=texts[i:i + self.batch])
+            resp = self.client.embeddings.create(model=self.deployment, input=texts[i : i + self.batch])
             self.tokens_used += resp.usage.total_tokens
             out.extend(d.embedding for d in sorted(resp.data, key=lambda d: d.index))
         return np.asarray(out, dtype=np.float32)
@@ -66,19 +67,35 @@ class AzureHybrid:
             SimpleField(name="kind", type=SearchFieldDataType.String, filterable=True),
             SearchableField(name="citation", type=SearchFieldDataType.String),
             SearchableField(name="content", type=SearchFieldDataType.String, analyzer_name="en.lucene"),
-            SearchField(name="embedding", type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
-                        searchable=True, vector_search_dimensions=dims, vector_search_profile_name="hnsw"),
+            SearchField(
+                name="embedding",
+                type=SearchFieldDataType.Collection(SearchFieldDataType.Single),
+                searchable=True,
+                vector_search_dimensions=dims,
+                vector_search_profile_name="hnsw",
+            ),
         ]
-        vs = VectorSearch(algorithms=[HnswAlgorithmConfiguration(name="hnsw-algo")],
-                          profiles=[VectorSearchProfile(name="hnsw", algorithm_configuration_name="hnsw-algo")])
+        vs = VectorSearch(
+            algorithms=[HnswAlgorithmConfiguration(name="hnsw-algo")],
+            profiles=[VectorSearchProfile(name="hnsw", algorithm_configuration_name="hnsw-algo")],
+        )
         self.index_client.create_or_update_index(SearchIndex(name=self.index, fields=fields, vector_search=vs))
 
     def upload(self, chunks: list[Chunk], vectors: np.ndarray, batch: int = 500) -> int:
-        docs = [{"id": c.id, "part": c.part, "kind": c.kind, "citation": c.citation, "content": c.index_text(),
-                 "embedding": v.tolist()} for c, v in zip(chunks, vectors, strict=True)]
+        docs = [
+            {
+                "id": c.id,
+                "part": c.part,
+                "kind": c.kind,
+                "citation": c.citation,
+                "content": c.index_text(),
+                "embedding": v.tolist(),
+            }
+            for c, v in zip(chunks, vectors, strict=True)
+        ]
         ok = 0
         for i in range(0, len(docs), batch):
-            ok += sum(r.succeeded for r in self.client.upload_documents(docs[i:i + batch]))
+            ok += sum(r.succeeded for r in self.client.upload_documents(docs[i : i + batch]))
             time.sleep(0.2)
         return ok
 
@@ -87,7 +104,9 @@ class AzureHybrid:
         results = self.client.search(
             search_text=query,
             vector_queries=[VectorizedQuery(vector=qv.tolist(), k_nearest_neighbors=50, fields="embedding")],
-            select=["id"], top=k)
+            select=["id"],
+            top=k,
+        )
         hits = []
         for rank, r in enumerate(results, 1):
             hits.append(Hit(self.by_id[r["id"]], float(r["@search.score"]), {"azure_hybrid": rank}))

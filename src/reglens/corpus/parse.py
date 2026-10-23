@@ -17,8 +17,33 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 LABEL = re.compile(r"\(([a-z]{1,3}|[0-9]{1,2}|[ivxl]{1,6}|[A-Z]{1,3})\)")
-ROMAN = {"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii", "xiv", "xv",
-         "xvi", "xvii", "xviii", "xix", "xx", "xxi", "xxii", "xxiii", "xxiv", "xxv"}
+ROMAN = {
+    "i",
+    "ii",
+    "iii",
+    "iv",
+    "v",
+    "vi",
+    "vii",
+    "viii",
+    "ix",
+    "x",
+    "xi",
+    "xii",
+    "xiii",
+    "xiv",
+    "xv",
+    "xvi",
+    "xvii",
+    "xviii",
+    "xix",
+    "xx",
+    "xxi",
+    "xxii",
+    "xxiii",
+    "xxiv",
+    "xxv",
+}
 COMMENT = re.compile(r"^(\d{1,2})\.\s+(.*)", re.DOTALL)
 SUPP_PARA = re.compile(r"^(?:Paragraph\s+)?(\d+[a-z]?(?:\([a-zA-Z0-9]{1,4}\))*)\s*(.*)$")
 
@@ -26,11 +51,11 @@ SUPP_PARA = re.compile(r"^(?:Paragraph\s+)?(\d+[a-z]?(?:\([a-zA-Z0-9]{1,4}\))*)\
 @dataclass
 class Passage:
     part: str
-    section: str              # "1005.11"; for interpretations the section they interpret
-    kind: str                 # "rule" | "interpretation"
-    citation: str             # human citation
-    label: str                # "(c)(1)(i)" for rules, "11(c)-1" for comments
-    heading: str              # section heading
+    section: str  # "1005.11"; for interpretations the section they interpret
+    kind: str  # "rule" | "interpretation"
+    citation: str  # human citation
+    label: str  # "(c)(1)(i)" for rules, "11(c)-1" for comments
+    heading: str  # section heading
     text: str
     children: list[str] = field(default_factory=list)
 
@@ -40,8 +65,33 @@ def _text(el: ET.Element) -> str:
 
 
 FIRST = {1: "a", 2: "1", 3: "i", 4: "A", 5: "1", 6: "i"}
-_ROMAN_ORDER = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii", "xiv", "xv",
-                "xvi", "xvii", "xviii", "xix", "xx", "xxi", "xxii", "xxiii", "xxiv", "xxv"]
+_ROMAN_ORDER = [
+    "i",
+    "ii",
+    "iii",
+    "iv",
+    "v",
+    "vi",
+    "vii",
+    "viii",
+    "ix",
+    "x",
+    "xi",
+    "xii",
+    "xiii",
+    "xiv",
+    "xv",
+    "xvi",
+    "xvii",
+    "xviii",
+    "xix",
+    "xx",
+    "xxi",
+    "xxii",
+    "xxiii",
+    "xxiv",
+    "xxv",
+]
 
 
 def _successor(tok: str, level: int) -> str | None:
@@ -71,7 +121,7 @@ def _level(tok: str, stack: list[tuple[int, str]]) -> int:
     top = stack[-1][0] if stack else 0
     best: tuple[int, int] | None = None  # (score, level)
     for lv in _candidates(tok):
-        open_at = [t for l, t in stack if l == lv]
+        open_at = [t for level, t in stack if level == lv]
         if open_at and _successor(open_at[-1], lv) == tok:
             score = 100 + lv  # sibling of an open paragraph, deeper wins
         elif tok == FIRST[lv] and lv == top + 1:
@@ -133,8 +183,17 @@ def parse_rules(section_el: ET.Element, part: str) -> list[Passage]:
         if out and not labels and out[-1].label == label:
             out[-1].text += " " + text  # continuation paragraph
             continue
-        out.append(Passage(part=part, section=n, kind="rule", citation=f"12 CFR {n}{label}",
-                           label=label, heading=heading, text=text))
+        out.append(
+            Passage(
+                part=part,
+                section=n,
+                kind="rule",
+                citation=f"12 CFR {n}{label}",
+                label=label,
+                heading=heading,
+                text=text,
+            )
+        )
     return out
 
 
@@ -162,8 +221,9 @@ def parse_interpretations(supp_el: ET.Element, part: str, warnings: list[str] | 
             warnings.append(f"dropped repeated comment block under {part} {base_para} ({len(blk)} comments)")
             return
         sec_short = blk[0].section.split(".")[1]
-        refs = Counter(m.group(1) for p in blk for m in re.finditer(
-            rf"{re.escape(blk[0].section)}((?:\([a-z0-9]+\))+)", p.text))
+        refs = Counter(
+            m.group(1) for p in blk for m in re.finditer(rf"{re.escape(blk[0].section)}((?:\([a-z0-9]+\))+)", p.text)
+        )
         new_para = f"{sec_short}{refs.most_common(1)[0][0]}" if refs else f"{base_para}[unlabeled]"
         warnings.append(f"comment block under {part} {base_para} has no heading; assigned {new_para}")
         for p in blk:
@@ -180,32 +240,52 @@ def parse_interpretations(supp_el: ET.Element, part: str, warnings: list[str] | 
             # Reg E puts sections in HD1, Reg Z in HD2; comments directly under a section cite as "12-1"
             section, sec_head, new_para = f"{sec.group(1)}.{sec.group(2)}", text, sec.group(2)
         elif el.tag == "HD1":
-            flush(block); block, last_num = [], 0
+            flush(block)
+            block, last_num = [], 0
             section, para = None, None  # subpart headings
             continue
         elif el.tag in ("HD2", "HD3"):
             m = SUPP_PARA.match(text)
             if m and section:
                 new_para = m.group(1)
-        elif el.tag == "P" and section and para and re.match(
-                r"^(?:Paragraph\s+)?\d+[a-z]?\([a-zA-Z0-9]{1,4}\)", text) and len(text) < 160:
+        elif (
+            el.tag == "P"
+            and section
+            and para
+            and re.match(r"^(?:Paragraph\s+)?\d+[a-z]?\([a-zA-Z0-9]{1,4}\)", text)
+            and len(text) < 160
+        ):
             new_para = SUPP_PARA.match(text).group(1)  # paragraph heading stored as a P element
         if new_para:
-            flush(block); block, last_num, para = [], 0, new_para
+            flush(block)
+            block, last_num, para = [], 0, new_para
             continue
         if el.tag == "P" and section and para:
             m = COMMENT.match(text)
             if m:
                 num = int(m.group(1))
                 if num <= last_num:  # numbering restarted with no heading
-                    flush(block); block = []
+                    flush(block)
+                    block = []
                     lbl = f"{para}-{num}-RESTART"
                 else:
-                    lbl = f"{para}-{num}" if not (block and block[0].label.endswith("-RESTART")) else f"{para}-{num}-RESTART"
+                    lbl = (
+                        f"{para}-{num}"
+                        if not (block and block[0].label.endswith("-RESTART"))
+                        else f"{para}-{num}-RESTART"
+                    )
                 last_num = num
-                block.append(Passage(part=part, section=section, kind="interpretation",
-                                     citation=f"Supplement I to Part {part}, comment {para}-{num}",
-                                     label=lbl, heading=sec_head, text=text))
+                block.append(
+                    Passage(
+                        part=part,
+                        section=section,
+                        kind="interpretation",
+                        citation=f"Supplement I to Part {part}, comment {para}-{num}",
+                        label=lbl,
+                        heading=sec_head,
+                        text=text,
+                    )
+                )
             elif block:
                 block[-1].text += " " + text  # sub-items "i. ..." continue the comment
     flush(block)
@@ -214,8 +294,9 @@ def parse_interpretations(supp_el: ET.Element, part: str, warnings: list[str] | 
     return out
 
 
-def parse_part(xml_bytes: bytes, part: str, sections: set[str] | None = None,
-               warnings: list[str] | None = None) -> list[Passage]:
+def parse_part(
+    xml_bytes: bytes, part: str, sections: set[str] | None = None, warnings: list[str] | None = None
+) -> list[Passage]:
     root = ET.fromstring(xml_bytes)
     passages: list[Passage] = []
     for el in root.iter():

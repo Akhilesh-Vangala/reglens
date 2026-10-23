@@ -1,10 +1,10 @@
 """reglens CLI.
 
-  reglens build [--refetch]                       fetch, parse and chunk the pinned corpus
-  reglens index                                   embed chunks and create/upload the Azure AI Search index
-  reglens ask "question" [--retriever hybrid]     answer one question through the governed pipeline
-  reglens eval retrieval --retrievers bm25 hybrid
-  reglens eval answers --configs A_closed_book B_rag_no_verify C_rag_verified
+reglens build [--refetch]                       fetch, parse and chunk the pinned corpus
+reglens index                                   embed chunks and create/upload the Azure AI Search index
+reglens ask "question" [--retriever hybrid]     answer one question through the governed pipeline
+reglens eval retrieval --retrievers bm25 hybrid
+reglens eval answers --configs A_closed_book B_rag_no_verify C_rag_verified
 """
 
 from __future__ import annotations
@@ -16,7 +16,9 @@ from reglens.config import ROOT
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(prog="reglens", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        prog="reglens", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--as-of", default="2026-10-02")
@@ -35,18 +37,27 @@ def main() -> None:
 
     if args.cmd == "build":
         from reglens.corpus.build import build
+
         build(args.as_of, args.refetch)
     elif args.cmd == "index":
         from reglens.config import AzureOpenAISettings, AzureSearchSettings
         from reglens.retrieval import Dense, load_chunks
         from reglens.retrieval.azure import AzureEmbedder, AzureHybrid
+
         chunks = load_chunks(ROOT / "data" / "processed" / "chunks.jsonl")
         emb = AzureEmbedder(AzureOpenAISettings.from_env())
         dense = Dense(chunks, emb, ROOT / "data" / "processed" / f"embeddings_{emb.deployment}.npz")
         az = AzureHybrid(AzureSearchSettings.from_env(), emb, chunks)
         az.create_index(dense.matrix.shape[1])
-        print(json.dumps({"uploaded": az.upload(chunks, dense.matrix), "dims": int(dense.matrix.shape[1]),
-                          "embedding_tokens": emb.tokens_used}))
+        print(
+            json.dumps(
+                {
+                    "uploaded": az.upload(chunks, dense.matrix),
+                    "dims": int(dense.matrix.shape[1]),
+                    "embedding_tokens": emb.tokens_used,
+                }
+            )
+        )
     elif args.cmd == "ask":
         from reglens.config import AzureOpenAISettings
         from reglens.eval.run import make_retriever
@@ -54,10 +65,13 @@ def main() -> None:
         from reglens.graph import build_pipeline
         from reglens.retrieval import load_chunks
         from reglens.telemetry import shutdown, tracer
+
         tracer(ROOT / "traces" / "spans.jsonl")
         chunks = load_chunks(ROOT / "data" / "processed" / "chunks.jsonl")
         corpus = {c.id: c for c in chunks}
-        app = build_pipeline(make_retriever(args.retriever, chunks), AzureGenerator(AzureOpenAISettings.from_env()), corpus)
+        app = build_pipeline(
+            make_retriever(args.retriever, chunks), AzureGenerator(AzureOpenAISettings.from_env()), corpus
+        )
         state = app.invoke({"question": args.question})
         final = state["final"]
         for c in final["claims"]:
@@ -66,6 +80,7 @@ def main() -> None:
         shutdown()
     elif args.cmd == "eval":
         from reglens.eval.run import eval_answers, eval_retrieval
+
         if args.kind == "retrieval":
             eval_retrieval(args.retrievers)
         else:

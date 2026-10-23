@@ -41,6 +41,7 @@ def tracer(path: Path | None = None):
         if os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"):
             from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
             from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
             _provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
     return _provider.get_tracer("reglens", "0.1.0")
 

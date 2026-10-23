@@ -76,8 +76,18 @@ def chunk_passages(passages: list[Passage]) -> list[Chunk]:
         pieces = _split(p.text)
         for i, piece in enumerate(pieces, 1):
             cid = _slug(p.citation) + (f"__{i}" if len(pieces) > 1 else "")
-            chunks.append(Chunk(id=cid, part=p.part, section=p.section, kind=p.kind, citation=p.citation,
-                                heading=p.heading, context=context, text=piece))
+            chunks.append(
+                Chunk(
+                    id=cid,
+                    part=p.part,
+                    section=p.section,
+                    kind=p.kind,
+                    citation=p.citation,
+                    heading=p.heading,
+                    context=context,
+                    text=piece,
+                )
+            )
     ids = [c.id for c in chunks]
     assert len(ids) == len(set(ids)), "duplicate chunk ids"
     return chunks

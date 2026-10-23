@@ -35,9 +35,10 @@ POLICY_CLOSED = POLICY.replace(
     "- Use ONLY the passages provided. Never use outside knowledge, never guess numbers, deadlines or amounts.\n"
     "- Every factual sentence in your answer must appear as a claim with the passage's chunk_id and a quote copied\n"
     "  word for word from that passage (1 to 2 consecutive sentences, no edits, no ellipses).\n"
-    "- If the passages do not answer the question, set status \"not_in_corpus\" and make no claims.\n",
+    '- If the passages do not answer the question, set status "not_in_corpus" and make no claims.\n',
     "- Answer from your own knowledge. For each factual sentence give a claim with the exact regulation\n"
-    "  citation it comes from (for example \"12 CFR 1005.11(c)(1)\").\n")
+    '  citation it comes from (for example "12 CFR 1005.11(c)(1)").\n',
+)
 
 
 def format_passages(chunks) -> str:

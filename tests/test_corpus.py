@@ -31,14 +31,17 @@ def test_citations_are_unique(passages):
     assert dupes == []
 
 
-@pytest.mark.parametrize("citation,starts", [
-    ("12 CFR 1005.11(c)(1)", "(c) Time limits and extent of investigation"),
-    ("12 CFR 1005.11(c)(2)(i)(A)", "(A) The institution requires but does not receive written confirmation"),
-    ("12 CFR 1005.6(b)(1)", None),
-    ("12 CFR 1005.18(b)(2)(ix)(D)(1)", "(D) Timing of initial assessment"),       # six-level nesting
-    ("12 CFR 1005.2(b)(3)(ii)(D)(2)", "(2) A store gift card"),                  # adjacent labels "(D)(1)"
-    ("12 CFR 1026.13(a)(1)", None),
-])
+@pytest.mark.parametrize(
+    "citation,starts",
+    [
+        ("12 CFR 1005.11(c)(1)", "(c) Time limits and extent of investigation"),
+        ("12 CFR 1005.11(c)(2)(i)(A)", "(A) The institution requires but does not receive written confirmation"),
+        ("12 CFR 1005.6(b)(1)", None),
+        ("12 CFR 1005.18(b)(2)(ix)(D)(1)", "(D) Timing of initial assessment"),  # six-level nesting
+        ("12 CFR 1005.2(b)(3)(ii)(D)(2)", "(2) A store gift card"),  # adjacent labels "(D)(1)"
+        ("12 CFR 1026.13(a)(1)", None),
+    ],
+)
 def test_rule_paths(passages, citation, starts):
     p = by_citation(passages).get(citation)
     assert p is not None, citation

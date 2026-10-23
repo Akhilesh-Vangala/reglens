@@ -55,5 +55,8 @@ class AzureSearchSettings:
 
     @classmethod
     def from_env(cls) -> AzureSearchSettings:
-        return cls(endpoint=_req("AZURE_SEARCH_ENDPOINT"), api_key=_req("AZURE_SEARCH_API_KEY"),
-                   index=os.getenv("AZURE_SEARCH_INDEX", "reglens-2026-10-02"))
+        return cls(
+            endpoint=_req("AZURE_SEARCH_ENDPOINT"),
+            api_key=_req("AZURE_SEARCH_API_KEY"),
+            index=os.getenv("AZURE_SEARCH_INDEX", "reglens-2026-10-02"),
+        )

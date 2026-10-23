@@ -29,8 +29,9 @@ def normalize_citation(text: str) -> str | None:
     return f"12 CFR {m.group(1)}{m.group(2)}" if m else None
 
 
-def score_rag(item: dict, final: dict, draft: dict | None, retrieved: dict[str, Chunk],
-              corpus: dict[str, Chunk]) -> dict:
+def score_rag(
+    item: dict, final: dict, draft: dict | None, retrieved: dict[str, Chunk], corpus: dict[str, Chunk]
+) -> dict:
     """final = what the member sees; draft = model output before the verifier (same as final when off)."""
     status = final.get("status")
     out = {"status_correct": status == item["expected_status"]}
@@ -39,14 +40,18 @@ def score_rag(item: dict, final: dict, draft: dict | None, retrieved: dict[str, 
     shown = check_claims(final.get("claims", []), retrieved, corpus)
     drafted = check_claims((draft or {}).get("claims", []), retrieved, corpus)
     out.update(
-        n_claims_shown=len(shown), n_unsupported_shown=sum(not c.verified for c in shown),
-        n_claims_drafted=len(drafted), n_unsupported_drafted=sum(not c.verified for c in drafted),
-        unsupported_reasons=[c.reason for c in drafted if not c.verified])
+        n_claims_shown=len(shown),
+        n_unsupported_shown=sum(not c.verified for c in shown),
+        n_claims_drafted=len(drafted),
+        n_unsupported_drafted=sum(not c.verified for c in drafted),
+        unsupported_reasons=[c.reason for c in drafted if not c.verified],
+    )
     if item["expected_status"] == "answered":
         facts = all(re.search(f, final.get("answer", ""), re.IGNORECASE) for f in item["must_include"])
         grounded = any(c.verified and cites_gold(c.citation, item["gold"]) for c in shown)
-        out.update(facts_present=facts, grounded_in_gold=grounded,
-                   answer_correct=status == "answered" and facts and grounded)
+        out.update(
+            facts_present=facts, grounded_in_gold=grounded, answer_correct=status == "answered" and facts and grounded
+        )
     return out
 
 
@@ -61,9 +66,18 @@ def score_closed_book(item: dict, final: dict, corpus_citations: set[str]) -> di
     out.update(n_claims_shown=len(cites), n_fabricated_citations=len(fabricated))
     if item["expected_status"] == "answered":
         facts = all(re.search(f, final.get("answer", ""), re.IGNORECASE) for f in item["must_include"])
-        out.update(facts_present=facts, answer_correct=status == "answered" and facts,
-                   cites_gold=any(c and any(c.startswith(g.removeprefix("Supplement I to Part ").split(",")[0])
-                                            or g.startswith(c) for g in item["gold"]) for c in cites))
+        out.update(
+            facts_present=facts,
+            answer_correct=status == "answered" and facts,
+            cites_gold=any(
+                c
+                and any(
+                    c.startswith(g.removeprefix("Supplement I to Part ").split(",")[0]) or g.startswith(c)
+                    for g in item["gold"]
+                )
+                for c in cites
+            ),
+        )
     return out
 
 
@@ -79,6 +93,11 @@ def paired_delta(a: dict[str, float], b: dict[str, float], n: int = 4000, seed: 
     shared = sorted(set(a) & set(b))
     d = [b[k] - a[k] for k in shared]
     mean, lo, hi = bootstrap(d, n, seed)
-    return {"n": len(shared), "delta": round(mean, 4), "ci95": [round(lo, 4), round(hi, 4)],
-            "significant": not (lo <= 0 <= hi), "improved": [k for k in shared if b[k] > a[k]],
-            "regressed": [k for k in shared if b[k] < a[k]]}
+    return {
+        "n": len(shared),
+        "delta": round(mean, 4),
+        "ci95": [round(lo, 4), round(hi, 4)],
+        "significant": not (lo <= 0 <= hi),
+        "improved": [k for k in shared if b[k] > a[k]],
+        "regressed": [k for k in shared if b[k] < a[k]],
+    }

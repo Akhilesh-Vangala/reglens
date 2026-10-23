@@ -34,9 +34,15 @@ class AzureGenerator:
     def __init__(self, s: AzureOpenAISettings, temperature: float = 0.0):
         from langchain_openai import AzureChatOpenAI
 
-        self.llm = AzureChatOpenAI(azure_endpoint=s.endpoint, api_key=s.api_key, api_version=s.api_version,
-                                   azure_deployment=s.chat_deployment, temperature=temperature,
-                                   max_retries=3, timeout=60)
+        self.llm = AzureChatOpenAI(
+            azure_endpoint=s.endpoint,
+            api_key=s.api_key,
+            api_version=s.api_version,
+            azure_deployment=s.chat_deployment,
+            temperature=temperature,
+            max_retries=3,
+            timeout=60,
+        )
         self.model = f"azure:{s.chat_deployment}"
 
     def generate(self, prompt: str, schema: type[BaseModel]) -> Generation:
@@ -50,10 +56,12 @@ class AzureGenerator:
         parsed = out.get("parsed")
         return Generation(
             parsed=parsed.model_dump() if parsed is not None else None,
-            input_tokens=int(usage.get("input_tokens", 0)), output_tokens=int(usage.get("output_tokens", 0)),
+            input_tokens=int(usage.get("input_tokens", 0)),
+            output_tokens=int(usage.get("output_tokens", 0)),
             seconds=time.perf_counter() - start,
             error=None if parsed is not None else f"parse_error: {out.get('parsing_error')}"[:500],
-            model=self.model)
+            model=self.model,
+        )
 
 
 @dataclass

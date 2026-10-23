@@ -28,9 +28,14 @@ def build(as_of: str, refetch: bool) -> Path:
     with out.open("w") as fh:
         for c in chunks:
             fh.write(json.dumps(c.to_dict()) + "\n")
-    stats = {"as_of": manifest["as_of"], "passages": len(passages), "chunks": len(chunks),
-             "by_part": dict(Counter(c.part for c in chunks)), "by_kind": dict(Counter(c.kind for c in chunks)),
-             "parse_warnings": warnings}
+    stats = {
+        "as_of": manifest["as_of"],
+        "passages": len(passages),
+        "chunks": len(chunks),
+        "by_part": dict(Counter(c.part for c in chunks)),
+        "by_kind": dict(Counter(c.kind for c in chunks)),
+        "parse_warnings": warnings,
+    }
     (out.parent / "corpus_stats.json").write_text(json.dumps(stats, indent=2))
     print(json.dumps(stats, indent=2))
     return out

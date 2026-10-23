@@ -19,8 +19,10 @@ CORPUS: dict[str, dict] = {
     "1005": {"name": "Regulation E (Electronic Fund Transfers)", "sections": None},
     "707": {"name": "NCUA Part 707 (Truth in Savings for credit unions)", "sections": None},
     "229": {"name": "Regulation CC (Availability of Funds and Collection of Checks)", "sections": None},
-    "1026": {"name": "Regulation Z (Truth in Lending), credit card liability and billing errors",
-             "sections": ["1026.12", "1026.13"]},
+    "1026": {
+        "name": "Regulation Z (Truth in Lending), credit card liability and billing errors",
+        "sections": ["1026.12", "1026.13"],
+    },
 }
 
 

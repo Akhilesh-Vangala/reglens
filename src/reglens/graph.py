@@ -33,8 +33,9 @@ class State(TypedDict, total=False):
     events: list[str]
 
 
-def build_pipeline(retriever: Retriever, generator: Generator, corpus: dict[str, Chunk], k: int = 8,
-                   verify: bool = True):
+def build_pipeline(
+    retriever: Retriever, generator: Generator, corpus: dict[str, Chunk], k: int = 8, verify: bool = True
+):
     t = tracer()
 
     def retrieve(state: State) -> State:
@@ -43,8 +44,12 @@ def build_pipeline(retriever: Retriever, generator: Generator, corpus: dict[str,
             span.set_attribute("reglens.retriever", retriever.name)
             span.set_attribute("reglens.k", k)
             span.set_attribute("reglens.retrieved_citations", [h.chunk.citation for h in hits])
-        return {"retrieved": [h.chunk.id for h in hits], "attempts": 0,
-                "usage": {"input_tokens": 0, "output_tokens": 0, "seconds": 0.0, "calls": 0}, "events": []}
+        return {
+            "retrieved": [h.chunk.id for h in hits],
+            "attempts": 0,
+            "usage": {"input_tokens": 0, "output_tokens": 0, "seconds": 0.0, "calls": 0},
+            "events": [],
+        }
 
     def generate(state: State) -> State:
         passages = [corpus[i] for i in state["retrieved"]]
@@ -61,8 +66,12 @@ def build_pipeline(retriever: Retriever, generator: Generator, corpus: dict[str,
             if g.error:
                 span.set_attribute("error.type", g.error[:200])
         u = dict(state["usage"])
-        u.update(input_tokens=u["input_tokens"] + g.input_tokens, output_tokens=u["output_tokens"] + g.output_tokens,
-                 seconds=u["seconds"] + g.seconds, calls=u["calls"] + 1)
+        u.update(
+            input_tokens=u["input_tokens"] + g.input_tokens,
+            output_tokens=u["output_tokens"] + g.output_tokens,
+            seconds=u["seconds"] + g.seconds,
+            calls=u["calls"] + 1,
+        )
         events = state["events"] + ([f"generation_error: {g.error}"] if g.error else [])
         return {"draft": g.parsed, "attempts": state["attempts"] + 1, "usage": u, "events": events}
 
@@ -82,8 +91,16 @@ def build_pipeline(retriever: Retriever, generator: Generator, corpus: dict[str,
         return "finalize"
 
     def finalize(state: State) -> State:
-        draft = dict(state.get("draft") or {"status": "not_in_corpus", "answer": "", "claims": [],
-                                             "needs_human_review": True, "review_reason": "generation failed"})
+        draft = dict(
+            state.get("draft")
+            or {
+                "status": "not_in_corpus",
+                "answer": "",
+                "claims": [],
+                "needs_human_review": True,
+                "review_reason": "generation failed",
+            }
+        )
         events = list(state["events"])
         if verify:
             ok = [c for c, chk in zip(draft["claims"], state["checks"], strict=True) if chk["verified"]]
@@ -92,8 +109,11 @@ def build_pipeline(retriever: Retriever, generator: Generator, corpus: dict[str,
                 events.append(f"dropped_unverified_claims: {dropped}")
             draft["claims"] = ok
             if draft["status"] == "answered" and not ok:
-                draft.update(status="not_in_corpus", needs_human_review=True,
-                             review_reason="no claim could be verified against the retrieved regulation text")
+                draft.update(
+                    status="not_in_corpus",
+                    needs_human_review=True,
+                    review_reason="no claim could be verified against the retrieved regulation text",
+                )
                 events.append("downgraded_to_not_in_corpus")
         return {"final": draft, "events": events}
 
@@ -110,4 +130,5 @@ def build_pipeline(retriever: Retriever, generator: Generator, corpus: dict[str,
 
 def _checks(rows: list[dict]):
     from reglens.verify import ClaimCheck
+
     return [ClaimCheck(**r) for r in rows]

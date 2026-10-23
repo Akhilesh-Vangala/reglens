@@ -24,14 +24,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5"]
+local = ["fastembed>=0.4"]
+serve = ["fastapi>=0.110", "uvicorn>=0.29", "fastembed>=0.4"]
+dev = ["pytest>=8", "ruff>=0.5", "fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.scripts]
 reglens-build = "reglens.corpus.build:main"
 reglens = "reglens.cli:main"
+reglens-serve = "reglens.server.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"reglens.server" = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

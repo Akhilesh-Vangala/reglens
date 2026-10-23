@@ -15,7 +15,7 @@ CHUNKS = [json.loads(line) for line in (ROOT / "data" / "processed" / "chunks.js
 
 def test_golden_schema():
     ids = [g["id"] for g in GOLDEN]
-    assert len(ids) == len(set(ids)) == 38
+    assert len(ids) == len(set(ids)) == 43
     for g in GOLDEN:
         assert g["expected_status"] in {"answered", "not_in_corpus", "refused"}
         assert bool(g["gold"]) == (g["expected_status"] == "answered")

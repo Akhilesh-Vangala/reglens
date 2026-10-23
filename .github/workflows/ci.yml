@@ -13,3 +13,4 @@ jobs:
       - run: pytest -q
       # offline, deterministic baseline: fails CI if retrieval or golden labels regress
       - run: reglens eval retrieval --retrievers bm25
+      - run: docker build -t reglens:ci .

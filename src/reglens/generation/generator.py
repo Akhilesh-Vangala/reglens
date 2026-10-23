@@ -1,4 +1,4 @@
-"""Model clients behind one protocol. Azure OpenAI via LangChain structured output in production;
+"""Model clients behind one protocol. Azure OpenAI (or OpenAI) via LangChain structured output in production;
 scripted fakes in tests. Every call returns the parsed answer plus measured token usage."""
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
-from reglens.config import AzureOpenAISettings
+from reglens.config import ModelSettings
 
 
 @dataclass
@@ -28,22 +28,20 @@ class Generator(Protocol):
     def generate(self, prompt: str, schema: type[BaseModel]) -> Generation: ...
 
 
-class AzureGenerator:
-    """LangChain AzureChatOpenAI with strict JSON-schema structured output, temperature 0."""
+class ChatGenerator:
+    """LangChain AzureChatOpenAI / ChatOpenAI with strict JSON-schema structured output, temperature 0."""
 
-    def __init__(self, s: AzureOpenAISettings, temperature: float = 0.0):
-        from langchain_openai import AzureChatOpenAI
+    def __init__(self, s: ModelSettings, temperature: float = 0.0):
+        from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
-        self.llm = AzureChatOpenAI(
-            azure_endpoint=s.endpoint,
-            api_key=s.api_key,
-            api_version=s.api_version,
-            azure_deployment=s.chat_deployment,
-            temperature=temperature,
-            max_retries=3,
-            timeout=60,
-        )
-        self.model = f"azure:{s.chat_deployment}"
+        common = dict(temperature=temperature, max_retries=3, timeout=60, api_key=s.api_key)
+        if s.provider == "azure":
+            self.llm = AzureChatOpenAI(
+                azure_endpoint=s.endpoint, api_version=s.api_version, azure_deployment=s.chat_deployment, **common
+            )
+        else:
+            self.llm = ChatOpenAI(model=s.chat_deployment, base_url=s.endpoint or None, **common)
+        self.model = f"{s.provider}:{s.chat_deployment}"
 
     def generate(self, prompt: str, schema: type[BaseModel]) -> Generation:
         runnable = self.llm.with_structured_output(schema, method="json_schema", strict=True, include_raw=True)

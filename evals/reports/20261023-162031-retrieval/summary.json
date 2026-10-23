@@ -1,0 +1,42 @@
+{
+  "provenance": {
+    "corpus_manifest_sha256": "d2b04018c22781630d1757c2fdb147bba7529080182b36e9c0e0bc187401aa0e",
+    "golden_sha256": "990e2287b30b88781a6723205cbd9e8fd002366f799fcfcf991e1ea2b6c52417",
+    "prompt_version": "rag-v1",
+    "git_commit": "8caacb7",
+    "started_at": "2026-10-23T20:20:31Z",
+    "kind": "retrieval",
+    "k": 8
+  },
+  "retrievers": {
+    "bm25": {
+      "recall@1": {
+        "mean": 0.182,
+        "lo": 0.061,
+        "hi": 0.333
+      },
+      "recall@3": {
+        "mean": 0.182,
+        "lo": 0.061,
+        "hi": 0.333
+      },
+      "recall@5": {
+        "mean": 0.242,
+        "lo": 0.091,
+        "hi": 0.394
+      },
+      "recall@8": {
+        "mean": 0.242,
+        "lo": 0.091,
+        "hi": 0.394
+      },
+      "mrr": {
+        "mean": 0.195,
+        "lo": 0.074,
+        "hi": 0.339
+      },
+      "latency_ms_median": 2.5
+    }
+  },
+  "paired_recall@5": {}
+}

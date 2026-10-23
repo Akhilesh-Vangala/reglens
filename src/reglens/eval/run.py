@@ -16,7 +16,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from reglens.config import ROOT, AzureOpenAISettings
+from reglens.config import ROOT, ModelSettings
 from reglens.corpus.chunk import Chunk
 from reglens.eval.metrics import bootstrap, paired_delta, retrieval_metrics, score_closed_book, score_rag
 from reglens.generation.prompts import CLOSED_BOOK_TEMPLATE, POLICY_CLOSED, PROMPT_VERSION
@@ -57,9 +57,24 @@ def make_retriever(name: str, chunks: list[Chunk]):
 
     if name == "bm25":
         return BM25(chunks)
-    from reglens.retrieval.azure import AzureEmbedder
+    if name.endswith("+rerank"):
+        from reglens.retrieval.local import Reranked
 
-    emb = AzureEmbedder(AzureOpenAISettings.from_env())
+        return Reranked(make_retriever(name.removesuffix("+rerank"), chunks))
+    if name in ("dense_bge", "hybrid_bge"):
+        from reglens.retrieval.local import LocalEmbedder
+
+        emb = LocalEmbedder()
+        dense = Dense(chunks, emb, ROOT / "data" / "processed" / f"embeddings_{emb.deployment}.npz")
+        dense.name = name if name == "dense_bge" else "dense_bge"
+        if name == "dense_bge":
+            return dense
+        hybrid = LocalHybrid(BM25(chunks), dense)
+        hybrid.name = name
+        return hybrid
+    from reglens.retrieval.azure import ModelEmbedder
+
+    emb = ModelEmbedder(ModelSettings.from_env())
     cache = ROOT / "data" / "processed" / f"embeddings_{emb.deployment}.npz"
     if name == "dense":
         return Dense(chunks, emb, cache)
@@ -131,16 +146,16 @@ def eval_retrieval(retriever_names: list[str], k: int = 8) -> Path:
     return out
 
 
-def eval_answers(configs: list[str], retriever_name: str = "hybrid", repeats: int = 1, k: int = 8) -> Path:
-    from reglens.generation.generator import AzureGenerator
+def eval_answers(configs: list[str], retriever_name: str = "dense_bge", repeats: int = 1, k: int = 8) -> Path:
+    from reglens.generation.generator import ChatGenerator
     from reglens.graph import build_pipeline
 
-    s = AzureOpenAISettings.from_env()
+    s = ModelSettings.from_env()
     chunks = load_chunks(CHUNKS)
     corpus = {c.id: c for c in chunks}
     corpus_citations = {c.citation for c in chunks}
     golden = load_golden()
-    gen = AzureGenerator(s)
+    gen = ChatGenerator(s)
     retriever = make_retriever(retriever_name, chunks) if any(c != "A_closed_book" for c in configs) else None
     rows = []
     for cfg in configs:

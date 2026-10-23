@@ -1,0 +1,8 @@
+.env
+.git
+.venv
+traces
+**/__pycache__
+.pytest_cache
+.ruff_cache
+data/processed/embeddings_*.npz

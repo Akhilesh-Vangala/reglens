@@ -143,7 +143,8 @@ class Dense:
             np.savez(cache, ids=np.array(ids), vectors=self.matrix)
 
     def search(self, query: str, k: int = 8) -> list[Hit]:
-        q = self.embedder.embed([query])[0]
+        embed_query = getattr(self.embedder, "embed_query", None)  # asymmetric models prefix queries
+        q = embed_query(query) if embed_query else self.embedder.embed([query])[0]
         s = self.matrix @ (q / np.linalg.norm(q))
         top = np.argsort(-s)[:k]
         return [Hit(self.chunks[i], float(s[i]), {"dense": r + 1}) for r, i in enumerate(top)]

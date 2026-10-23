@@ -23,20 +23,23 @@ from azure.search.documents.indexes.models import (
     VectorSearchProfile,
 )
 from azure.search.documents.models import VectorizedQuery
-from openai import AzureOpenAI
+from openai import AzureOpenAI, OpenAI
 
-from reglens.config import AzureOpenAISettings, AzureSearchSettings
+from reglens.config import AzureSearchSettings, ModelSettings
 from reglens.corpus.chunk import Chunk
 from reglens.retrieval import Hit
 
 
-class AzureEmbedder:
-    def __init__(self, s: AzureOpenAISettings, batch: int = 64):
-        self.client = AzureOpenAI(
-            azure_endpoint=s.endpoint, api_key=s.api_key, api_version=s.api_version, max_retries=5
-        )
+class ModelEmbedder:
+    def __init__(self, s: ModelSettings, batch: int = 64):
+        if s.provider == "azure":
+            self.client = AzureOpenAI(
+                azure_endpoint=s.endpoint, api_key=s.api_key, api_version=s.api_version, max_retries=5
+            )
+        else:
+            self.client = OpenAI(api_key=s.api_key, base_url=s.endpoint or None, max_retries=5)
         self.deployment, self.batch = s.embedding_deployment, batch
-        self.name = f"azure:{s.embedding_deployment}"
+        self.name = f"{s.provider}:{s.embedding_deployment}"
         self.tokens_used = 0
 
     def embed(self, texts: list[str]) -> np.ndarray:
@@ -53,7 +56,7 @@ class AzureHybrid:
 
     name = "azure_hybrid"
 
-    def __init__(self, s: AzureSearchSettings, embedder: AzureEmbedder, chunks: list[Chunk]):
+    def __init__(self, s: AzureSearchSettings, embedder: ModelEmbedder, chunks: list[Chunk]):
         cred = AzureKeyCredential(s.api_key)
         self.index_client = SearchIndexClient(s.endpoint, cred)
         self.client = SearchClient(s.endpoint, s.index, cred)

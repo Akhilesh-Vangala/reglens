@@ -1,4 +1,7 @@
-"""LangGraph pipeline: retrieve -> generate -> verify -> (retry once with feedback | finalize).
+"""LangGraph pipeline: guard -> retrieve -> generate -> verify -> (retry once with feedback | finalize).
+
+Guard masks PII before the question reaches retrieval, the model or traces. A spend ledger, when given,
+admits or refuses each model call before it is sent.
 
 Finalize never lets an unverified claim through: unverified claims are removed, and an answer left with
 no verified claim becomes "not_in_corpus" with human review requested. The model proposes; deterministic
@@ -15,6 +18,7 @@ from reglens.corpus.chunk import Chunk
 from reglens.generation.generator import Generator
 from reglens.generation.prompts import POLICY, PROMPT_VERSION, RAG_TEMPLATE, format_passages
 from reglens.generation.schema import Answer
+from reglens.guard import BudgetExceeded, SpendLedger, redact
 from reglens.retrieval import Retriever
 from reglens.telemetry import tracer
 from reglens.verify import check_claims, feedback
@@ -24,6 +28,7 @@ MAX_RETRIES = 1
 
 class State(TypedDict, total=False):
     question: str
+    redactions: dict[str, int]
     retrieved: list[str]
     draft: dict | None
     checks: list[dict]
@@ -34,9 +39,22 @@ class State(TypedDict, total=False):
 
 
 def build_pipeline(
-    retriever: Retriever, generator: Generator, corpus: dict[str, Chunk], k: int = 8, verify: bool = True
+    retriever: Retriever,
+    generator: Generator,
+    corpus: dict[str, Chunk],
+    k: int = 8,
+    verify: bool = True,
+    ledger: SpendLedger | None = None,
+    prices: tuple[float, float] | None = None,  # USD per 1M input, output tokens
 ):
     t = tracer()
+
+    def guard(state: State) -> State:
+        r = redact(state["question"])
+        with t.start_as_current_span("guard") as span:
+            for name, n in r.counts.items():
+                span.set_attribute(f"reglens.pii.{name}", n)
+        return {"question": r.text, "redactions": r.counts}
 
     def retrieve(state: State) -> State:
         with t.start_as_current_span("retrieve") as span:
@@ -57,7 +75,18 @@ def build_pipeline(
         if state.get("checks") and state.get("draft"):
             prompt += "\n\n" + feedback(_checks(state["checks"])) + "\n\nYOUR PREVIOUS ANSWER:\n" + str(state["draft"])
         with t.start_as_current_span("generate") as span:
+            est_in = len(prompt) // 4
+            try:
+                if ledger:
+                    ledger.admit(est_in, est_in * prices[0] / 1e6 if prices else None)
+            except BudgetExceeded as exc:
+                span.set_attribute("error.type", "budget_exceeded")
+                events = state["events"] + [f"budget_exceeded: {exc}"]
+                return {"attempts": state["attempts"] + 1, "events": events}  # keep any earlier draft
             g = generator.generate(prompt, Answer)
+            if ledger:
+                usd = (g.input_tokens * prices[0] + g.output_tokens * prices[1]) / 1e6 if prices else None
+                ledger.record(g.input_tokens, g.output_tokens, usd)
             span.set_attribute("gen_ai.request.model", g.model)
             span.set_attribute("gen_ai.usage.input_tokens", g.input_tokens)
             span.set_attribute("gen_ai.usage.output_tokens", g.output_tokens)
@@ -118,9 +147,16 @@ def build_pipeline(
         return {"final": draft, "events": events}
 
     g = StateGraph(State)
-    for name, fn in (("retrieve", retrieve), ("generate", generate), ("verify", check), ("finalize", finalize)):
+    for name, fn in (
+        ("guard", guard),
+        ("retrieve", retrieve),
+        ("generate", generate),
+        ("verify", check),
+        ("finalize", finalize),
+    ):
         g.add_node(name, fn)
-    g.add_edge(START, "retrieve")
+    g.add_edge(START, "guard")
+    g.add_edge("guard", "retrieve")
     g.add_edge("retrieve", "generate")
     g.add_edge("generate", "verify")
     g.add_conditional_edges("verify", route, {"generate": "generate", "finalize": "finalize"})

@@ -1,0 +1,41 @@
+{
+  "source": "eCFR versioner API",
+  "as_of": "2026-10-02",
+  "parts": {
+    "1005": {
+      "name": "Regulation E (Electronic Fund Transfers)",
+      "sections": null,
+      "file": "title12_part1005_2026-10-02.xml",
+      "sha256": "0669a14f83f836f4086de21514f3bcd40041784e50c444b415f4d8e1909a10d0",
+      "bytes": 859423,
+      "url": "https://www.ecfr.gov/api/versioner/v1/full/2026-10-02/title-12.xml?part=1005"
+    },
+    "707": {
+      "name": "NCUA Part 707 (Truth in Savings for credit unions)",
+      "sections": null,
+      "file": "title12_part707_2026-10-02.xml",
+      "sha256": "57d2897b1bac8e1a9a77474fbdb2c9a8aa12695cc4632456643f19eb491c99a4",
+      "bytes": 293924,
+      "url": "https://www.ecfr.gov/api/versioner/v1/full/2026-10-02/title-12.xml?part=707"
+    },
+    "229": {
+      "name": "Regulation CC (Availability of Funds and Collection of Checks)",
+      "sections": null,
+      "file": "title12_part229_2026-10-02.xml",
+      "sha256": "f4ea58812edfc6182c98bc2827deecb30c48e6edfea53eea8002067039473333",
+      "bytes": 687814,
+      "url": "https://www.ecfr.gov/api/versioner/v1/full/2026-10-02/title-12.xml?part=229"
+    },
+    "1026": {
+      "name": "Regulation Z (Truth in Lending), credit card liability and billing errors",
+      "sections": [
+        "1026.12",
+        "1026.13"
+      ],
+      "file": "title12_part1026_2026-10-02.xml",
+      "sha256": "d4b9040e205b27a1dd300fe0cf26c97eb173bee53cdaec758573a65450e500f0",
+      "bytes": 3946980,
+      "url": "https://www.ecfr.gov/api/versioner/v1/full/2026-10-02/title-12.xml?part=1026"
+    }
+  }
+}

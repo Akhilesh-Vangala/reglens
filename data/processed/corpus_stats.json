@@ -1,0 +1,19 @@
+{
+  "as_of": "2026-10-02",
+  "passages": 2371,
+  "chunks": 2495,
+  "by_part": {
+    "1005": 1477,
+    "707": 165,
+    "229": 659,
+    "1026": 194
+  },
+  "by_kind": {
+    "rule": 1640,
+    "interpretation": 855
+  },
+  "parse_warnings": [
+    "comment block under 1005 17(b)(2) has no heading; assigned 17(b)(3)",
+    "dropped repeated comment block under 1005 32(b)(1) (6 comments)"
+  ]
+}

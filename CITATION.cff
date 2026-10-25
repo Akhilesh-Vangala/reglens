@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use RegLens, please cite it as below."
+title: "RegLens: a governed member-service copilot over consumer-banking regulations"
+type: software
+authors:
+  - family-names: Vangala
+    given-names: Sai Akhilesh
+    affiliation: New York University
+license: MIT
+repository-code: "https://github.com/Akhilesh-Vangala/reglens"
+url: "https://reglens-blush.vercel.app"
+version: 1.0.0
+date-released: 2026-10-25
+keywords: [rag, ai-agents, langgraph, llm-evaluation, ai-governance, consumer-banking-regulation]

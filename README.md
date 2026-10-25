@@ -209,3 +209,8 @@ docs/MODEL_CARD.md       intended use, limits, evaluation, governance hooks
 - **The business-day calendar is an assumption.** It uses Federal Reserve holidays; Reg E defines business days by when the institution is open.
 - **The corpus is a point-in-time snapshot.** Two parser repairs are logged in `data/processed/corpus_stats.json`.
 - **This explains regulations; it does not decide a member's case.** Institution policies, rates and account data are out of scope by design.
+
+## Author
+
+**Sai Akhilesh Vangala** ([@Akhilesh-Vangala](https://github.com/Akhilesh-Vangala)), New York University. Design,
+implementation and evaluation. Released under the [MIT License](LICENSE); see [CITATION.cff](CITATION.cff) to cite.

@@ -44,7 +44,7 @@ CHUNKS = ROOT / "data" / "processed" / "chunks.jsonl"
 STATIC = Path(__file__).parent / "static"
 REPORTS = ROOT / "evals" / "reports"
 
-app = FastAPI(title="RegLens", version="1.0.0", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
+app = FastAPI(title="RegLens", version="1.1.0", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 log = logging.getLogger("reglens.http")
 if not log.handlers:

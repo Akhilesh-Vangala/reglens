@@ -42,3 +42,29 @@ jobs:
       - run: deploy/k8s/smoke.sh
       - if: failure()
         run: kubectl -n reglens get all,events --sort-by=.lastTimestamp | tail -60
+
+  e2e:
+    # the real FastAPI app in a browser: user flows plus an axe WCAG 2 A/AA scan of every tab in both themes
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ..
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/test-results

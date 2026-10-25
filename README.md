@@ -179,6 +179,7 @@ pytest -q                     # unit, golden, calculator, copilot, server; store
 reglens eval retrieval        # downloads bge-small on first run
 reglens-serve                 # http://127.0.0.1:8000  (API reference at /api/docs)
 reglens check-law             # has any in-scope regulation been amended since the snapshot?
+cd e2e && npm ci && npx playwright install chromium && npx playwright test   # browser flows + axe WCAG 2 AA, both themes
 ```
 
 **Full stack (app + Qdrant + Neo4j + loader):** `docker compose up --build`

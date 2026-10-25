@@ -3,6 +3,19 @@
 Every measured number in this project is tied to the commit that produced it (see `evals/reports/*/summary.json`),
 so history is kept as written rather than rewritten. This file is the organized view.
 
+## 1.1.0 — 2026-10-25
+
+**Web console**
+- Every view is a link: `#copilot?run=C01` replays a recorded run, `#checker?chunk=…&quote=…` re-runs a check,
+  `#explore?node=…&q=…&ret=…` reopens a search and graph neighborhood, `#deadlines?preset=…` a scenario.
+- Verified citations link to their paragraph in the citation graph and back into the checker.
+- Copilot runs and replays can be stopped mid-run (AbortController), with an elapsed timer.
+- WAI-ARIA tabs (arrows, Home, End, roving focus), skip link, keyboard-walkable graph, live regions,
+  loading skeletons, error states with retry, copy-link and copy-reply toasts.
+- Light and dark themes (system default, persisted choice applied before first paint, CSP unchanged).
+- Playwright suite against the real FastAPI app, with an axe WCAG 2 A/AA scan of every tab in both themes and a
+  mobile overflow check; runs in CI.
+
 ## 1.0.0 — 2026-10-25
 
 First evaluated release: the copilot and pipeline measured with a real model (Claude Haiku 5.5).

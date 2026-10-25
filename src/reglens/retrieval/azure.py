@@ -32,6 +32,8 @@ from reglens.retrieval import Hit
 
 class ModelEmbedder:
     def __init__(self, s: ModelSettings, batch: int = 64):
+        if s.provider == "anthropic":
+            raise RuntimeError("Anthropic has no embeddings API; use the dense_bge or hybrid_bge retriever")
         if s.provider == "azure":
             self.client = AzureOpenAI(
                 azure_endpoint=s.endpoint, api_key=s.api_key, api_version=s.api_version, max_retries=5

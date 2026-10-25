@@ -35,7 +35,11 @@ class ChatGenerator:
         from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
         common = dict(temperature=temperature, max_retries=3, timeout=60, api_key=s.api_key)
-        if s.provider == "azure":
+        if s.provider == "anthropic":
+            from langchain_anthropic import ChatAnthropic
+
+            self.llm = ChatAnthropic(model=s.chat_deployment, max_tokens=2048, **common)
+        elif s.provider == "azure":
             self.llm = AzureChatOpenAI(
                 azure_endpoint=s.endpoint, api_version=s.api_version, azure_deployment=s.chat_deployment, **common
             )
@@ -44,7 +48,9 @@ class ChatGenerator:
         self.model = f"{s.provider}:{s.chat_deployment}"
 
     def generate(self, prompt: str, schema: type[BaseModel]) -> Generation:
-        runnable = self.llm.with_structured_output(schema, method="json_schema", strict=True, include_raw=True)
+        # Claude's json_schema mode is constrained decoding already; OpenAI needs strict=True to get the same
+        strict = {} if self.model.startswith("anthropic:") else {"strict": True}
+        runnable = self.llm.with_structured_output(schema, method="json_schema", include_raw=True, **strict)
         start = time.perf_counter()
         try:
             out = runnable.invoke(prompt)

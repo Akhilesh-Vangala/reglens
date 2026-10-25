@@ -66,3 +66,15 @@ def test_pipeline_budget_refusal_escalates_without_calling_model(tmp_path):
     out = build_pipeline(Fixed(), gen, CORPUS, ledger=led).invoke({"question": "how long to investigate?"})
     assert gen.prompts == [] and out["final"]["needs_human_review"] and out["final"]["status"] == "not_in_corpus"
     assert any(e.startswith("budget_exceeded") for e in out["events"])
+
+
+def test_anthropic_settings_and_client_construct_without_network(monkeypatch):
+    from reglens.config import ModelSettings
+    from reglens.generation.generator import ChatGenerator
+
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("ANTHROPIC_CHAT_MODEL", "claude-haiku-5-5")
+    s = ModelSettings.from_env()
+    assert (s.provider, s.chat_deployment, s.embedding_deployment) == ("anthropic", "claude-haiku-5-5", "")
+    assert ChatGenerator(s).model == "anthropic:claude-haiku-5-5"

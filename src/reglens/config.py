@@ -24,8 +24,9 @@ def _req(name: str) -> str:
 
 @dataclass(frozen=True)
 class ModelSettings:
-    """LLM_PROVIDER=azure (Azure OpenAI deployments) or openai (OpenAI API, or any OpenAI-compatible base URL).
-    The pipeline, prompts, schema and verifier are identical for both; only the client differs."""
+    """LLM_PROVIDER=azure (Azure OpenAI deployments), openai (OpenAI API or any OpenAI-compatible base URL) or
+    anthropic (Claude API; no embeddings, so use the local dense_bge retriever). The pipeline, prompts, schema
+    and verifier are identical for all; only the client differs."""
 
     provider: str
     endpoint: str
@@ -57,8 +58,18 @@ class ModelSettings:
                 embedding_deployment=_req("OPENAI_EMBEDDING_MODEL"),
                 **prices,
             )
+        if provider == "anthropic":
+            return cls(
+                provider="anthropic",
+                endpoint="",
+                api_key=_req("ANTHROPIC_API_KEY"),
+                api_version="",
+                chat_deployment=_req("ANTHROPIC_CHAT_MODEL"),
+                embedding_deployment="",
+                **prices,
+            )
         if provider != "azure":
-            raise RuntimeError(f"LLM_PROVIDER must be azure or openai, got {provider!r}")
+            raise RuntimeError(f"LLM_PROVIDER must be azure, openai or anthropic, got {provider!r}")
         return cls(
             provider="azure",
             endpoint=_req("AZURE_OPENAI_ENDPOINT"),

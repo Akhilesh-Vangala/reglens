@@ -1,6 +1,6 @@
 .PHONY: install build test index eval-retrieval eval-retrieval-azure eval-answers serve
 install:
-	python -m pip install -e ".[dev,local]"
+	python -m pip install -e ".[dev,serve]"
 build:
 	reglens build
 test:

@@ -8,3 +8,4 @@ traces/
 data/processed/embeddings_*.npz
 # open-weight corpus embeddings are committed so serverless cold starts don't re-embed 2,495 passages
 !data/processed/embeddings_bge-small-en-v1.5.npz
+.vercel

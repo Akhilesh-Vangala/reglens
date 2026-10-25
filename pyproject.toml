@@ -21,12 +21,13 @@ dependencies = [
   "azure-search-documents>=11.5",
   "opentelemetry-sdk>=1.25",
   "python-dotenv>=1.0",
+  "fastapi>=0.110",
+  "fastembed>=0.4",
 ]
 
 [project.optional-dependencies]
-local = ["fastembed>=0.4"]
-serve = ["fastapi>=0.110", "uvicorn>=0.29", "fastembed>=0.4"]
-dev = ["pytest>=8", "ruff>=0.5", "fastapi>=0.110", "uvicorn>=0.29"]
+serve = ["uvicorn>=0.29"]
+dev = ["pytest>=8", "ruff>=0.5", "uvicorn>=0.29"]
 
 [project.scripts]
 reglens-build = "reglens.corpus.build:main"

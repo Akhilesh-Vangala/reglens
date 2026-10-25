@@ -28,7 +28,8 @@ dependencies = [
 
 [project.optional-dependencies]
 serve = ["uvicorn>=0.29"]
-dev = ["pytest>=8", "ruff>=0.5", "uvicorn>=0.29"]
+stores = ["qdrant-client>=1.15", "neo4j>=5.20"]
+dev = ["pytest>=8", "ruff>=0.5", "uvicorn>=0.29", "qdrant-client>=1.15", "neo4j>=5.20"]
 
 [project.scripts]
 reglens-build = "reglens.corpus.build:main"

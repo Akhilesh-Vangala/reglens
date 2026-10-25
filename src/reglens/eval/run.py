@@ -61,6 +61,16 @@ def make_retriever(name: str, chunks: list[Chunk]):
         from reglens.retrieval.local import Reranked
 
         return Reranked(make_retriever(name.removesuffix("+rerank"), chunks))
+    if name in ("qdrant_bge", "qdrant_bge_exact"):
+        from reglens.retrieval.qdrant import from_env
+
+        return from_env(make_retriever("dense_bge", chunks), chunks, exact=name.endswith("exact"))
+    if name.startswith("graph_bge"):  # graph_bge_s<seeds>
+        from reglens.kg import build_graph
+        from reglens.retrieval.graph import GraphExpanded
+
+        seeds = int(name.rsplit("_s", 1)[1]) if "_s" in name else 3
+        return GraphExpanded(make_retriever("dense_bge", chunks), build_graph(chunks), seeds=seeds)
     if name in ("dense_bge", "hybrid_bge"):
         from reglens.retrieval.local import LocalEmbedder
 

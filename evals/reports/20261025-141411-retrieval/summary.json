@@ -1,0 +1,208 @@
+{
+  "provenance": {
+    "corpus_manifest_sha256": "d2b04018c22781630d1757c2fdb147bba7529080182b36e9c0e0bc187401aa0e",
+    "golden_sha256": "990e2287b30b88781a6723205cbd9e8fd002366f799fcfcf991e1ea2b6c52417",
+    "prompt_version": "rag-v1",
+    "git_commit": "ccea4e5",
+    "started_at": "2026-10-25T18:14:09Z",
+    "kind": "retrieval",
+    "k": 8
+  },
+  "retrievers": {
+    "dense_bge": {
+      "recall@1": {
+        "mean": 0.485,
+        "lo": 0.303,
+        "hi": 0.667
+      },
+      "recall@3": {
+        "mean": 0.667,
+        "lo": 0.485,
+        "hi": 0.818
+      },
+      "recall@5": {
+        "mean": 0.758,
+        "lo": 0.606,
+        "hi": 0.879
+      },
+      "recall@8": {
+        "mean": 0.848,
+        "lo": 0.727,
+        "hi": 0.97
+      },
+      "mrr": {
+        "mean": 0.598,
+        "lo": 0.452,
+        "hi": 0.738
+      },
+      "latency_ms_median": 6.1
+    },
+    "graph_bge_s1": {
+      "recall@1": {
+        "mean": 0.485,
+        "lo": 0.303,
+        "hi": 0.667
+      },
+      "recall@3": {
+        "mean": 0.606,
+        "lo": 0.424,
+        "hi": 0.758
+      },
+      "recall@5": {
+        "mean": 0.697,
+        "lo": 0.545,
+        "hi": 0.848
+      },
+      "recall@8": {
+        "mean": 0.818,
+        "lo": 0.667,
+        "hi": 0.939
+      },
+      "mrr": {
+        "mean": 0.576,
+        "lo": 0.425,
+        "hi": 0.72
+      },
+      "latency_ms_median": 6.0
+    },
+    "graph_bge_s3": {
+      "recall@1": {
+        "mean": 0.485,
+        "lo": 0.303,
+        "hi": 0.667
+      },
+      "recall@3": {
+        "mean": 0.606,
+        "lo": 0.424,
+        "hi": 0.758
+      },
+      "recall@5": {
+        "mean": 0.667,
+        "lo": 0.485,
+        "hi": 0.818
+      },
+      "recall@8": {
+        "mean": 0.818,
+        "lo": 0.667,
+        "hi": 0.939
+      },
+      "mrr": {
+        "mean": 0.57,
+        "lo": 0.417,
+        "hi": 0.715
+      },
+      "latency_ms_median": 5.5
+    },
+    "graph_bge_s5": {
+      "recall@1": {
+        "mean": 0.485,
+        "lo": 0.303,
+        "hi": 0.667
+      },
+      "recall@3": {
+        "mean": 0.606,
+        "lo": 0.424,
+        "hi": 0.758
+      },
+      "recall@5": {
+        "mean": 0.667,
+        "lo": 0.485,
+        "hi": 0.818
+      },
+      "recall@8": {
+        "mean": 0.727,
+        "lo": 0.576,
+        "hi": 0.879
+      },
+      "mrr": {
+        "mean": 0.557,
+        "lo": 0.4,
+        "hi": 0.706
+      },
+      "latency_ms_median": 5.5
+    }
+  },
+  "paired_recall@5": {
+    "dense_bge->graph_bge_s1": {
+      "n": 33,
+      "delta": -0.0606,
+      "ci95": [
+        -0.1515,
+        0.0
+      ],
+      "significant": false,
+      "improved": [],
+      "regressed": [
+        "C03",
+        "Z03"
+      ]
+    },
+    "dense_bge->graph_bge_s3": {
+      "n": 33,
+      "delta": -0.0909,
+      "ci95": [
+        -0.2121,
+        0.0
+      ],
+      "significant": false,
+      "improved": [],
+      "regressed": [
+        "C03",
+        "E06",
+        "Z03"
+      ]
+    },
+    "dense_bge->graph_bge_s5": {
+      "n": 33,
+      "delta": -0.0909,
+      "ci95": [
+        -0.2121,
+        0.0
+      ],
+      "significant": false,
+      "improved": [],
+      "regressed": [
+        "C03",
+        "E06",
+        "Z03"
+      ]
+    },
+    "graph_bge_s1->graph_bge_s3": {
+      "n": 33,
+      "delta": -0.0303,
+      "ci95": [
+        -0.0909,
+        0.0
+      ],
+      "significant": false,
+      "improved": [],
+      "regressed": [
+        "E06"
+      ]
+    },
+    "graph_bge_s1->graph_bge_s5": {
+      "n": 33,
+      "delta": -0.0303,
+      "ci95": [
+        -0.0909,
+        0.0
+      ],
+      "significant": false,
+      "improved": [],
+      "regressed": [
+        "E06"
+      ]
+    },
+    "graph_bge_s3->graph_bge_s5": {
+      "n": 33,
+      "delta": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "significant": false,
+      "improved": [],
+      "regressed": []
+    }
+  }
+}

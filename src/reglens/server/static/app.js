@@ -26,7 +26,10 @@ function show(tab) {
   $$("[data-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== tab));
   if (location.hash.slice(1) !== tab) history.replaceState(null, "", "#" + tab);
   if (tab === "results") loadResults();
-  if (tab === "explore" && !$("#q").value) { $("#q").value = "my debit card was stolen, how much could I lose"; doSearch(); }
+  if (tab === "explore" && !$("#q").value) {  // a rich first view: the $50 rule, its interpretations and citers
+    $("#q").value = "my debit card was stolen, how much could I lose";
+    openGraph("12_CFR_1005_6_b_1").then(() => doSearch(false));
+  }
 }
 $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) show(b.dataset.tab); });
 window.addEventListener("hashchange", () => show(location.hash.slice(1)));
@@ -265,7 +268,7 @@ async function runCheck() {
 $("#ck_run").addEventListener("click", runCheck);
 
 // ---------------------------------------------------------------- search + citation graph
-async function doSearch() {
+async function doSearch(openFirst = true) {
   const q = $("#q").value.trim(); if (!q) return;
   $("#hits").innerHTML = `<span class="spinner"></span>`;
   try {
@@ -273,10 +276,10 @@ async function doSearch() {
     $("#hits").innerHTML = (Object.keys(r.redactions).length ? `<div class="banner sky">Masked: ${esc(Object.keys(r.redactions).join(", "))}</div>` : "") +
       `<div class="muted">${r.hits.length} results · ${r.latency_ms} ms · ${esc(r.retriever)}</div>` +
       r.hits.map((h) => `<div class="hit" data-id="${esc(h.id)}"><div class="cit">${h.rank}. ${esc(h.citation)}</div><div class="meta">${esc(h.heading)} · ${esc(h.kind)} · ${h.score}</div><div>${esc(h.text)}${h.text.length >= 400 ? "…" : ""}</div></div>`).join("");
-    const first = $(".hit", $("#hits")); if (first) openGraph(first.dataset.id);
+    const hits = $$(".hit", $("#hits")); if (hits.length && openFirst) openGraph(hits[0].dataset.id);
   } catch (e) { $("#hits").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
-$("#searchBtn").addEventListener("click", doSearch);
+$("#searchBtn").addEventListener("click", () => doSearch());
 $("#q").addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
 $("#hits").addEventListener("click", (e) => { const h = e.target.closest(".hit"); if (h) openGraph(h.dataset.id); });
 
@@ -289,8 +292,8 @@ async function openGraph(id) {
   const nodes = ns.map((n, i) => { const a = -Math.PI / 2 + (2 * Math.PI * i) / Math.max(ns.length, 1); return { ...n, x: cx + R * Math.cos(a), y: cy + R * Math.sin(a), a }; });
   const svg = `<svg class="graphsvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="citation graph">
     ${nodes.map((n) => `<line x1="${cx}" y1="${cy}" x2="${n.x}" y2="${n.y}" stroke="${GROUP(n)[1]}" stroke-width="1.6" opacity=".6"/>`).join("")}
-    <circle cx="${cx}" cy="${cy}" r="30" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="2.5"/>
-    <text x="${cx}" y="${cy + 4}" font-size="11" text-anchor="middle" fill="var(--ink)" font-weight="700">${esc(shortCit(g.citation).slice(0, 18))}</text>
+    <circle cx="${cx}" cy="${cy}" r="16" fill="var(--violet)" stroke="var(--violet-soft)" stroke-width="6"/>
+    <text x="${cx}" y="${cy + 38}" font-size="12.5" text-anchor="middle" fill="var(--ink)" font-weight="700">${esc(shortCit(g.citation))}</text>
     ${nodes.map((n) => { const c = Math.cos(n.a), anchor = c > 0.3 ? "start" : c < -0.3 ? "end" : "middle", lx = n.x + c * 14, ly = n.y + Math.sin(n.a) * 14 + 4;
       return `<g class="node" data-id="${esc(n.id)}"><title>${esc(n.citation)}\n${esc(n.text)}</title><circle cx="${n.x}" cy="${n.y}" r="9" fill="${GROUP(n)[1]}" stroke="var(--panel)" stroke-width="2"/>
       <text x="${lx}" y="${ly}" font-size="10.5" text-anchor="${anchor}" fill="var(--muted)">${esc(shortCit(n.citation).slice(0, 26))}</text></g>`; }).join("")}
@@ -298,7 +301,7 @@ async function openGraph(id) {
   const more = g.neighbors.length > ns.length ? `<p class="muted">Showing 16 of ${g.neighbors.length} neighbors.</p>` : "";
   const groups = {}; g.neighbors.forEach((n) => (groups[GROUP(n)[0]] = (groups[GROUP(n)[0]] || 0) + 1));
   $("#graphOut").innerHTML = `<div class="row" style="margin:0 0 6px"><span class="pill p-violet mono">${esc(g.citation)}</span>
-    ${Object.entries(groups).map(([k, v]) => `<span class="pill p-indigo">${v} ${esc(k)}</span>`).join("")}</div>
+    ${Object.entries(groups).map(([k, v]) => `<span class="pill p-indigo">${v} ${esc(v === 1 || k.startsWith("cite") ? k : k.replace("interpretation", "interpretations").replace("rule ", "rules "))}</span>`).join("")}</div>
     ${g.neighbors.length ? svg + more : `<p class="muted">No cross-references or interpretations link to this paragraph.</p>`}
     <p class="muted">Click a node to walk the graph.</p>`;
 }

@@ -28,7 +28,7 @@ class ScriptedChat:
     def __init__(self, turns):
         self.turns, self.seen = list(turns), []
 
-    def bind_tools(self, tools):
+    def bind_tools(self, tools, **kwargs):
         return self
 
     def invoke(self, messages):
@@ -177,3 +177,24 @@ def test_part_filter_is_pushed_down_to_retrievers_that_support_it():
     )
     build_copilot(r, GRAPH, CORPUS, llm, today=date(2026, 10, 25)).invoke({"case": "q"})
     assert r.calls == ["1005"]
+
+
+def test_tool_specs_use_real_names_and_strict_schemas():
+    from reglens.copilot import tool_specs
+
+    specs = {t["function"]["name"]: t["function"]["parameters"] for t in tool_specs()}
+    assert set(specs) == {"search_regulations", "related_paragraphs", "compute_deadlines", "submit_answer"}
+    d = specs["compute_deadlines"]
+    assert d["additionalProperties"] is False and set(d["required"]) == set(d["properties"])
+    claim_schema = specs["submit_answer"]["properties"]["claims"]["items"]
+    assert "$ref" not in str(specs) and claim_schema["additionalProperties"] is False
+
+
+def test_stringified_nested_arguments_are_decoded():
+    out, _ = run(
+        [
+            [("compute_deadlines", {**DEADLINES[1], "transfers": '[{"date": "2026-10-20", "amount": 400}]'})],
+            [submit("ok", [], case_type="out_of_scope")],
+        ]
+    )
+    assert out["timelines"][0]["items"][0]["amount"] == 50.0

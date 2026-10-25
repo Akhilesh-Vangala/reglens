@@ -140,6 +140,8 @@ def unauthorized_eft(
     `learned_of_loss` is when the member learned the card/access device was lost or stolen (None if no device
     was lost, e.g. a hacked account); `statement_sent` is when the first statement showing the transfer was sent."""
     t = Timeline("unauthorized_electronic_fund_transfer")
+    if not transfers:
+        t.warnings.append("No unauthorized transfers were given, so the liability caps below are computed on $0.")
     before_notice = sum(a for d, a in transfers if d < notified)
     if learned_of_loss:
         two_day = add_business_days(learned_of_loss, 2)

@@ -155,6 +155,52 @@ TOOLS = {
 }
 
 
+def strict_schema(model: type[BaseModel]) -> dict:
+    """JSON schema for strict tool use: references inlined, every property required (optional ones stay nullable),
+    no additional properties. Pydantic models still validate on our side with their defaults."""
+    root = model.model_json_schema()
+    defs = root.pop("$defs", {})
+
+    def walk(node):
+        if isinstance(node, list):
+            return [walk(n) for n in node]
+        if not isinstance(node, dict):
+            return node
+        if "$ref" in node:
+            return walk(defs[node["$ref"].split("/")[-1]])
+        out = {k: walk(v) for k, v in node.items() if k not in ("title", "default")}
+        if out.get("type") == "object" and "properties" in out:
+            out["required"] = list(out["properties"])
+            out["additionalProperties"] = False
+        return out
+
+    return walk(root)
+
+
+def tool_specs() -> list[dict]:
+    """Tools under their real names (binding the Pydantic classes directly would expose the class names)."""
+    return [
+        {
+            "type": "function",
+            "function": {"name": name, "description": (cls.__doc__ or "").strip(), "parameters": strict_schema(cls)},
+        }
+        for name, cls in TOOLS.items()
+    ]
+
+
+def _decode(args: dict) -> dict:
+    """Models occasionally send nested JSON as a string ('[{"date": ...}]'); decode those before validation."""
+    out = {}
+    for k, v in args.items():
+        if isinstance(v, str) and v[:1] in "[{":
+            try:
+                v = json.loads(v)
+            except json.JSONDecodeError:
+                pass
+        out[k] = v
+    return out
+
+
 class CopilotState(TypedDict, total=False):
     case: str
     redactions: dict
@@ -195,7 +241,7 @@ def build_copilot(
 ):
     """`llm` is any LangChain chat model supporting bind_tools (ChatAnthropic, ChatOpenAI, AzureChatOpenAI)."""
     t = tracer()
-    model = llm.bind_tools([TOOLS[n] for n in TOOLS])
+    model = llm.bind_tools(tool_specs(), strict=True)
     system = SYSTEM.format(today=(today or date.today()).isoformat())
 
     def guard(state: CopilotState) -> CopilotState:
@@ -250,7 +296,7 @@ def build_copilot(
         last: AIMessage = state["messages"][-1]
         out, seen, timelines, steps, submitted = [], list(state["seen"]), list(state["timelines"]), [], None
         for call in last.tool_calls:
-            t0, name, args = time.perf_counter(), call["name"], call["args"]
+            t0, name, args = time.perf_counter(), call["name"], _decode(call["args"])
             try:
                 if name == "search_regulations":
                     a = SearchArgs(**args)
@@ -279,8 +325,8 @@ def build_copilot(
                     summary = [f"{p['relation']} {p['citation']}" for p in payload]
                 elif name == "compute_deadlines":
                     payload = _run_deadlines(DeadlineArgs(**args))
-                    if "error" not in payload:
-                        timelines.append(payload)
+                    if "error" not in payload:  # a recomputation for the same case type replaces the earlier one
+                        timelines = [x for x in timelines if x["case_type"] != payload["case_type"]] + [payload]
                     summary = [i["label"] for i in payload.get("items", [])][:3] or payload.get("error")
                 elif name == "submit_answer":
                     submitted = SubmitArgs(**args).model_dump()

@@ -205,7 +205,7 @@ def test_failed_run_still_settles_the_reservation(monkeypatch):
     _configured(monkeypatch, store)
 
     class Boom:
-        def bind_tools(self, tools):
+        def bind_tools(self, tools, **kwargs):
             return self
 
         def invoke(self, messages):

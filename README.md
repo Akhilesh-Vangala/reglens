@@ -2,6 +2,8 @@
 
 Governed retrieval-augmented answers about consumer-banking regulations, for member-service staff.
 
+**Live demo: https://reglens-blush.vercel.app** (semantic search and provenance work without keys; answering is enabled when a model key is configured).
+
 A member asks "my debit card was stolen and I called this morning, what's the most I could lose?". RegLens answers only from the regulation text: every sentence carries a citation and a verbatim quote, and deterministic code checks both before anything is shown. A claim that can't be verified is removed. An answer left with nothing verified goes to a person, not to the member.
 
 **Corpus.** Pinned eCFR text as of 2026-10-02, with a SHA-256 for every source file:
@@ -81,7 +83,7 @@ Every gold fact is checked against the regulation text in CI (`tests/test_golden
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev,serve]"
-pytest -q                                   # 67 tests, offline
+pytest -q                                   # 68 tests, offline
 reglens eval retrieval                      # downloads bge-small (~130 MB) on first run
 reglens-serve                               # http://127.0.0.1:8000
 ```

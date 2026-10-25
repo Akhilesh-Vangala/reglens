@@ -12,8 +12,10 @@ import numpy as np
 
 from reglens.retrieval import Hit
 
-if os.getenv("VERCEL"):  # model weights download to the only writable path on cold start
+if os.getenv("VERCEL"):  # serverless: /tmp is the only writable path for weights and hub caches
     os.environ.setdefault("FASTEMBED_CACHE_PATH", "/tmp/fastembed")
+    os.environ.setdefault("HF_HOME", "/tmp/hf")
+    os.environ.setdefault("HF_XET_CACHE", "/tmp/hf/xet")
 
 BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 

@@ -18,7 +18,7 @@ from pathlib import Path
 # Order matters: card numbers before generic account numbers.
 PII_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("ssn", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
-    ("card_number", re.compile(r"\b(?:\d[ -]?){13,19}\b")),
+    ("card_number", re.compile(r"\b\d(?:[ -]?\d){12,18}\b")),
     ("email", re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")),
     ("phone", re.compile(r"(?<!\d)(?:\+1[ .-]?)?\(?\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}(?!\d)")),
     ("account_number", re.compile(r"\b(?:account|acct|member)\s*(?:number|no\.?|#)?\s*:?\s*\d{5,17}\b", re.I)),

@@ -22,6 +22,10 @@ def test_redact_masks_each_identifier(text, kind):
     assert r.counts == {kind: 1} and f"[{kind.upper()} REDACTED]" in r.text
 
 
+def test_redact_keeps_surrounding_text_intact():
+    assert redact("card 4111 1111 1111 1111 stolen").text == "card [CARD_NUMBER REDACTED] stolen"
+
+
 def test_redact_leaves_regulatory_numbers_alone():
     q = "Under 12 CFR 1005.6(b)(1), is liability $50 if reported within 2 business days or 60 days?"
     assert redact(q).text == q and not redact(q).redacted

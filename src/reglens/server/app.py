@@ -446,7 +446,7 @@ def ask(req: AskRequest, request: Request):
     final = state["final"]
     for c in final["claims"]:
         ch = corpus()[c["chunk_id"]]
-        c["citation"] = ch.citation
+        c.setdefault("citation", ch.citation)
         c["source"] = ch.source_text()
         c["span"] = _span(c["source"], c["quote"])
     u = state.get("usage", {})

@@ -5,6 +5,9 @@ A claim is verified only if:
   2. its quote, after whitespace/quote-mark normalization, is a substring of that passage's
      verbatim source text (context + text), and
   3. the quote is long enough to carry meaning (>= MIN_QUOTE characters).
+
+Each chunk carries its parent paragraph's lead-in as context ("The term error means: ..."). A quote found only in
+that context is attributed to the parent paragraph, so the citation names where the words actually are.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ class ClaimCheck:
     citation: str | None
     verified: bool
     reason: str  # ok | unknown_chunk | not_retrieved | quote_too_short | quote_not_in_source
+    matched_in: str | None = None  # text | context (parent lead-in)
 
 
 def check_claims(claims: list[dict], retrieved: dict[str, Chunk], corpus: dict[str, Chunk]) -> list[ClaimCheck]:
@@ -47,8 +51,19 @@ def check_claims(claims: list[dict], retrieved: dict[str, Chunk], corpus: dict[s
             reason = "quote_not_in_source"
         else:
             reason = "ok"
-        out.append(ClaimCheck(cid, chunk.citation if chunk else None, reason == "ok", reason))
+        citation, where = (chunk.citation if chunk else None), None
+        if reason == "ok":
+            where = "text" if quote in normalize(chunk.text) else "context"
+            if where == "context":
+                citation = parent_citation(chunk.citation)
+        out.append(ClaimCheck(cid, citation, reason == "ok", reason, where))
     return out
+
+
+def parent_citation(citation: str) -> str:
+    """'12 CFR 1005.6(b)(2)(ii)' -> '12 CFR 1005.6(b)(2)'. Comments and section roots are returned unchanged."""
+    trimmed = re.sub(r"\([a-zA-Z0-9]+\)$", "", citation)
+    return trimmed if "(" in trimmed else citation
 
 
 def feedback(checks: list[ClaimCheck]) -> str:

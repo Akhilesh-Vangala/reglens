@@ -84,7 +84,7 @@ def main() -> None:
         state = app.invoke({"question": args.question})
         final = state["final"]
         for c in final["claims"]:
-            c["citation"] = corpus[c["chunk_id"]].citation
+            c.setdefault("citation", corpus[c["chunk_id"]].citation)  # unverified runs (verify=False) only
         print(json.dumps({"final": final, "events": state["events"], "usage": state["usage"]}, indent=2))
         shutdown()
     elif args.cmd == "eval":

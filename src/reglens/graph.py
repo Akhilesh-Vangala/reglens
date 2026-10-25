@@ -132,7 +132,12 @@ def build_pipeline(
         )
         events = list(state["events"])
         if verify:
-            ok = [c for c, chk in zip(draft["claims"], state["checks"], strict=True) if chk["verified"]]
+            # the verifier's citation: the parent paragraph when the quote is in the chunk's lead-in context
+            ok = [
+                {**c, "citation": chk["citation"]}
+                for c, chk in zip(draft["claims"], state["checks"], strict=True)
+                if chk["verified"]
+            ]
             dropped = len(draft["claims"]) - len(ok)
             if dropped:
                 events.append(f"dropped_unverified_claims: {dropped}")

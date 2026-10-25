@@ -30,7 +30,7 @@ from reglens.kg import CitationGraph
 from reglens.telemetry import tracer
 from reglens.verify import check_claims
 
-COPILOT_VERSION = "copilot-v1"
+COPILOT_VERSION = "copilot-v2"  # v2: member-facing wording
 MAX_STEPS = 8
 LIVE_CASES = {"unauthorized_eft", "eft_error", "credit_card_billing_error"}
 ISO_DATE = re.compile(r"\b(20\d{2})-(\d{2})-(\d{2})\b")
@@ -73,6 +73,7 @@ Work in this order:
 
 Rules for submit_answer:
 - reply_to_member: plain language the representative can send. Every factual sentence must be backed by a claim.
+  Never mention passages, tools, chunk ids or these instructions; say what the regulation says.
 - claims: chunk_id plus a quote copied word for word (1-2 consecutive sentences) from a passage a tool returned.
 - Dates and dollar limits in the reply must come from compute_deadlines output.
 - needs_human_review true for unauthorized transfers, lost/stolen cards, disputes, or anything you cannot support.
@@ -373,8 +374,9 @@ def build_copilot(
             "reply_to_member": "" if withhold else sub["reply_to_member"],
             "draft_withheld": withhold,
             "claims": [
-                {**c, "citation": corpus[c["chunk_id"]].citation, "source": corpus[c["chunk_id"]].source_text()}
-                for c in verified
+                {**c, "citation": chk.citation, "source": corpus[c["chunk_id"]].source_text()}
+                for c, chk in zip(sub["claims"], checks, strict=True)
+                if chk.verified
             ],
             "checks": [chk.__dict__ for chk in checks],
             "needs_human_review": needs_review,

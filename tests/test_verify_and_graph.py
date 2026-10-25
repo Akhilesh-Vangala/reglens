@@ -93,7 +93,7 @@ def test_graph_retries_once_with_feedback_then_accepts_verified_answer():
     app, gen = _pipeline([ans([claim("a", "a made up paraphrase of the rule here")]), ans([good])])
     out = app.invoke({"question": "q"})
     assert len(gen.prompts) == 2 and "failed verification" in gen.prompts[1]
-    assert out["final"]["status"] == "answered" and out["final"]["claims"] == [good]
+    assert out["final"]["status"] == "answered" and out["final"]["claims"] == [{**good, "citation": A.citation}]
 
 
 def test_graph_strips_unverified_claims_and_downgrades_empty_answer():
@@ -109,3 +109,31 @@ def test_ablation_without_verifier_passes_draft_through():
     app, gen = _pipeline([bad], verify=False)
     out = app.invoke({"question": "q"})
     assert len(gen.prompts) == 1 and out["final"]["claims"] == bad["claims"]
+
+
+def test_quote_from_parent_lead_in_is_attributed_to_the_parent_paragraph():
+    from reglens.verify import parent_citation
+
+    child = Chunk(
+        "c",
+        "1005",
+        "1005.6",
+        "rule",
+        "12 CFR 1005.6(b)(2)(ii)",
+        "§ 1005.6",
+        "the consumer's liability shall not exceed the lesser of $500 or the sum of:",
+        "(ii) The amount of unauthorized transfers that occur after the close of two business days.",
+    )
+    corpus = {"c": child}
+    [in_context] = check_claims(
+        [claim("c", "liability shall not exceed the lesser of $500 or the sum of")], corpus, corpus
+    )
+    [in_text] = check_claims(
+        [claim("c", "unauthorized transfers that occur after the close of two business")], corpus, corpus
+    )
+    assert (in_context.citation, in_context.matched_in) == ("12 CFR 1005.6(b)(2)", "context")
+    assert (in_text.citation, in_text.matched_in) == ("12 CFR 1005.6(b)(2)(ii)", "text")
+    assert (
+        parent_citation("Supplement I to Part 1005, comment 6(b)(1)-1")
+        == "Supplement I to Part 1005, comment 6(b)(1)-1"
+    )

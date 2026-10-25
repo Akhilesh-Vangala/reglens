@@ -1,14 +1,19 @@
 """HTTP service and demo UI.
 
 GET  /                      demo page
-GET  /api/meta              corpus provenance, model status, example questions
-GET  /api/search?q=&k=      retrieval only (BM25 works with no credentials)
+GET  /api/meta              corpus provenance, model + limiter status, example questions and cases
+GET  /api/search?q=&k=      retrieval only
 GET  /api/chunk/{id}        one passage, verbatim
-POST /api/ask               full governed pipeline; per-stage latency, tokens, cost, events
+GET  /api/graph/{id}        citation-graph neighbors of a passage (Official Interpretations, cross-references)
+POST /api/verify            run the deterministic quote verifier on a claim against a passage
+POST /api/timeline          deterministic Reg E / Reg Z deadline and liability calculator
+POST /api/ask               governed RAG pipeline (model)
+POST /api/copilot           member-service copilot agent (model)
 GET  /api/evals             latest evaluation summaries
 
-The model client is created lazily: without credentials the service still serves retrieval and the
-verifier, and /api/ask answers 503 with the reason instead of failing at startup.
+Everything except /api/ask and /api/copilot is deterministic and needs no credentials. The two model endpoints
+require a configured model, prices, and (on a public deployment) the durable rate limiter in limits.py; they
+answer 503/429 with the reason instead of failing.
 """
 
 from __future__ import annotations
@@ -19,7 +24,7 @@ import time
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -27,7 +32,8 @@ from reglens.config import ROOT, STATE_DIR, ModelSettings
 from reglens.corpus.chunk import Chunk
 from reglens.guard import SpendLedger, redact
 from reglens.retrieval import BM25, load_chunks
-from reglens.verify import normalize
+from reglens.server.limits import Limiter, LimitExceeded, client_id
+from reglens.verify import check_claims, normalize
 
 CHUNKS = ROOT / "data" / "processed" / "chunks.jsonl"
 STATIC = Path(__file__).parent / "static"
@@ -61,6 +67,43 @@ def model_status() -> dict:
     except RuntimeError as exc:
         return {"configured": False, "reason": str(exc)}
     return {"configured": True, "provider": s.provider, "chat": s.chat_deployment, "embedding": s.embedding_deployment}
+
+
+@lru_cache(maxsize=1)
+def graph():
+    from reglens.kg import build_graph
+
+    return build_graph(list(corpus().values()))
+
+
+@lru_cache(maxsize=1)
+def limiter() -> Limiter:
+    return Limiter.from_env()
+
+
+def answering_status() -> dict:
+    m = model_status()
+    if not m["configured"]:
+        return {"enabled": False, "reason": m["reason"]}
+    s = ModelSettings.from_env()
+    if s.price_input_per_m is None or s.price_output_per_m is None:
+        return {"enabled": False, "reason": "model prices are not configured"}
+    if not limiter().enabled:
+        return {"enabled": False, "reason": "no durable rate limiter configured for this public deployment"}
+    return {"enabled": True, "rate_per_hour": limiter().per_hour, "daily_usd_cap": limiter().daily_usd}
+
+
+def _admit(request: Request, calls: int, in_tokens: int, out_tokens: int):
+    """Reserve the worst case of a model request against the per-client and daily limits."""
+    st = answering_status()
+    if not st["enabled"]:
+        raise HTTPException(503, f"Answering is disabled: {st['reason']}")
+    s = ModelSettings.from_env()
+    worst = calls * (in_tokens * s.price_input_per_m + out_tokens * s.price_output_per_m) / 1e6
+    try:
+        return limiter().admit(client_id(request.headers), worst), worst, s
+    except LimitExceeded as exc:
+        raise HTTPException(429, str(exc)) from exc
 
 
 @lru_cache(maxsize=1)
@@ -101,7 +144,119 @@ def meta():
         "parts": {p: {"name": m["name"], "sha256": m["sha256"][:12]} for p, m in manifest["parts"].items()},
         "stats": {k: stats[k] for k in ("passages", "chunks", "by_part", "by_kind")},
         "model": model_status(),
+        "answering": answering_status(),
         "examples": examples,
+        "cases": COPILOT_CASES,
+        "graph": graph().stats(),
+    }
+
+
+COPILOT_CASES = [
+    {
+        "id": "stolen-card",
+        "case": "Member: My debit card was stolen on Tuesday Oct 20 and I called you first thing the "
+        "next morning (Oct 21). There's a $400 ATM withdrawal from Oct 20 I didn't make. What happens now?",
+    },
+    {
+        "id": "late-report",
+        "case": "Member: I lost my card on Oct 1 but only reported it today, Oct 23. Someone spent "
+        "$40 on Oct 2 and $900 on Oct 15. Am I stuck with all of it?",
+    },
+    {
+        "id": "card-dispute",
+        "case": "Member: My credit card statement sent Sept 15 has a $250 charge from a store I "
+        "never shopped at. I mailed you a dispute letter that you received Oct 1. When will this be fixed?",
+    },
+    {
+        "id": "check-hold",
+        "case": "Member: I deposited a $3,000 check yesterday and you put a hold on it. How long can "
+        "you hold my money?",
+    },
+    {"id": "out-of-scope", "case": "Member: Should I sue the store that charged me twice? Write me a demand letter."},
+]
+
+
+@app.get("/api/graph/{chunk_id}")
+def graph_neighbors(chunk_id: str):
+    c = corpus().get(chunk_id)
+    if c is None:
+        raise HTTPException(404, "unknown chunk")
+    out = []
+    for rel, direction, cit in graph().neighbors(c.citation):
+        n = graph().chunks_by_citation[cit][0]
+        out.append(
+            {
+                "relation": rel,
+                "direction": direction,
+                "citation": cit,
+                "id": n.id,
+                "heading": n.heading,
+                "text": n.text[:300],
+            }
+        )
+    return {"citation": c.citation, "neighbors": out}
+
+
+class VerifyRequest(BaseModel):
+    chunk_id: str
+    quote: str = Field(max_length=4000)
+    retrieved: bool = True
+
+
+@app.post("/api/verify")
+def verify(req: VerifyRequest):
+    c = corpus().get(req.chunk_id)
+    if c is None:
+        raise HTTPException(404, "unknown chunk")
+    [chk] = check_claims([{"chunk_id": c.id, "quote": req.quote}], {c.id: c} if req.retrieved else {}, corpus())
+    src = c.source_text()
+    return {**chk.__dict__, "span": _span(src, req.quote) if chk.verified else None, "source": src}
+
+
+@app.post("/api/timeline")
+def timeline(req: dict):
+    from reglens.copilot import DeadlineArgs, _run_deadlines
+
+    try:
+        out = _run_deadlines(DeadlineArgs(**req))
+    except Exception as exc:  # noqa: BLE001  (validation errors are the caller's)
+        raise HTTPException(422, str(exc)[:300]) from exc
+    if "error" in out:
+        raise HTTPException(422, out["error"])
+    return out
+
+
+class CopilotRequest(BaseModel):
+    case: str = Field(min_length=10, max_length=3000)
+
+
+@app.post("/api/copilot")
+def copilot(req: CopilotRequest, request: Request):
+    from reglens.copilot import MAX_STEPS, build_copilot, chat_model
+
+    day, reserved, s = _admit(request, MAX_STEPS, 12_000, 4_000)
+    app_ = build_copilot(
+        retriever("dense_bge"),
+        graph(),
+        corpus(),
+        chat_model(s),
+        ledger=ledger(),
+        prices=(s.price_input_per_m, s.price_output_per_m),
+    )
+    t0 = time.perf_counter()
+    state = app_.invoke({"case": req.case})
+    actual = state.get("usage", {}).get("usd", reserved)
+    limiter().settle(day, reserved, actual)
+    r = state["result"]
+    for c in r["claims"]:
+        c["span"] = _span(c["source"], c["quote"])
+    return {
+        "result": r,
+        "steps": state["steps"],
+        "usage": state["usage"],
+        "redactions": state["redactions"],
+        "seconds": round(time.perf_counter() - t0, 2),
+        "model": model_status(),
     }
 
 
@@ -159,15 +314,13 @@ def _span(text: str, quote: str) -> list[int] | None:
 
 
 @app.post("/api/ask")
-def ask(req: AskRequest):
-    status = model_status()
-    if not status["configured"]:
-        raise HTTPException(503, f"No model configured: {status['reason']}")
+def ask(req: AskRequest, request: Request):
     from reglens.generation.generator import ChatGenerator
     from reglens.graph import build_pipeline
 
-    s = ModelSettings.from_env()
-    prices = (s.price_input_per_m, s.price_output_per_m) if s.price_input_per_m and s.price_output_per_m else None
+    status = model_status()
+    day, reserved, s = _admit(request, 2, 8_000, 8_000)
+    prices = (s.price_input_per_m, s.price_output_per_m)
     app_ = build_pipeline(retriever(req.retriever), ChatGenerator(s), corpus(), k=req.k, ledger=ledger(), prices=prices)
     stages, state, t_prev = [], {}, time.perf_counter()
     for update in app_.stream({"question": req.question}, stream_mode="updates"):
@@ -183,7 +336,8 @@ def ask(req: AskRequest):
         c["source"] = ch.source_text()
         c["span"] = _span(c["source"], c["quote"])
     u = state.get("usage", {})
-    cost = (u.get("input_tokens", 0) * prices[0] + u.get("output_tokens", 0) * prices[1]) / 1e6 if prices else None
+    cost = (u.get("input_tokens", 0) * prices[0] + u.get("output_tokens", 0) * prices[1]) / 1e6
+    limiter().settle(day, reserved, cost)
     return {
         "final": final,
         "redactions": state.get("redactions", {}),

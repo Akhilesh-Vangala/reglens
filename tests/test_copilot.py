@@ -219,3 +219,46 @@ def test_total_of_member_amounts_does_not_withhold_but_an_invented_total_does():
         )
         out = build_copilot(Fixed(), GRAPH, CORPUS, llm, today=date(2026, 10, 25)).invoke({"case": case})
         assert out["result"]["draft_withheld"] is withheld, total
+
+
+def test_call_cost_prices_cache_reads_writes_and_is_conservative_without_a_read_price():
+    from reglens.copilot import call_cost
+
+    # 10,000 input of which 8,000 cache reads and 1,000 cache writes; 500 output; Haiku 5.5 list prices
+    with_read = call_cost(10_000, 500, 8_000, 1_000, (0.10, 0.50, 0.01))
+    without = call_cost(10_000, 500, 8_000, 1_000, (0.10, 0.50))
+    assert round(with_read * 1e6, 3) == round(1_000 * 0.10 + 8_000 * 0.01 + 1_000 * 0.125 + 500 * 0.50, 3)
+    assert without > with_read  # unset read price never under-counts
+
+
+def test_not_covered_question_releases_a_redirect_without_claims():
+    out, _ = run(
+        [
+            [
+                submit(
+                    "I can't answer rate questions from these rules; a loan officer can help.",
+                    [],
+                    case_type="not_covered",
+                )
+            ]
+        ]
+    )
+    r = out["result"]
+    assert r["case_type"] == "not_covered" and not r["draft_withheld"] and r["claims"] == []
+
+
+def test_prompt_cache_breakpoint_is_requested_only_from_the_anthropic_client():
+    class Recording(ScriptedChat):
+        _llm_type = "anthropic-chat"
+
+        def __init__(self, turns):
+            super().__init__(turns)
+            self.kwargs = []
+
+        def invoke(self, messages, **kwargs):
+            self.kwargs.append(kwargs)
+            return super().invoke(messages)
+
+    llm = Recording([[submit("ok", [], case_type="out_of_scope")]])
+    build_copilot(Fixed(), GRAPH, CORPUS, llm, today=date(2026, 10, 25)).invoke({"case": "q"})
+    assert llm.kwargs == [{"cache_control": {"type": "ephemeral"}}]

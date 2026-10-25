@@ -39,7 +39,7 @@ def main(ids: list[str]) -> None:
             chat_model(s),
             today=date.fromisoformat(case["today"]),
             ledger=ledger,
-            prices=(s.price_input_per_m, s.price_output_per_m),
+            prices=(s.price_input_per_m, s.price_output_per_m, s.price_cache_read_per_m),
         )
         events, state, emitted = [{"type": "start", "max_steps": MAX_STEPS}], {}, 0
         for update in app.stream({"case": case["case"]}, stream_mode="updates"):

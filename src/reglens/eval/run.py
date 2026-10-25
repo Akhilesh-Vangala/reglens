@@ -241,7 +241,13 @@ def eval_answers(configs: list[str], retriever_name: str = "dense_bge", repeats:
 def _copilot_as_pipeline_answer(state: dict) -> tuple[dict, dict]:
     """Map a copilot run onto the pipeline's answer shape so configuration D is scored by the same function."""
     r, sub = state["result"], state.get("submitted") or {}
-    status = "refused" if r["case_type"] == "out_of_scope" else "not_in_corpus" if r["draft_withheld"] else "answered"
+    status = (
+        "refused"
+        if r["case_type"] == "out_of_scope"
+        else "not_in_corpus"
+        if r["case_type"] == "not_covered" or r["draft_withheld"]
+        else "answered"
+    )
     final = {
         "status": status,
         "answer": r["reply_to_member"],
@@ -265,7 +271,7 @@ def _answer_rows(configs, repeats, golden, gen, retriever, corpus, corpus_citati
                 corpus,
                 chat_model(s),
                 ledger=gen.ledger,
-                prices=(s.price_input_per_m, s.price_output_per_m),
+                prices=(s.price_input_per_m, s.price_output_per_m, s.price_cache_read_per_m),
             )
         elif cfg == "A_closed_book":
             app = None
@@ -296,8 +302,8 @@ def _answer_rows(configs, repeats, golden, gen, retriever, corpus, corpus_citati
                     score = score_rag(g, final, state.get("draft"), retrieved, corpus)
                     usage, events = state["usage"], state["events"]
                     err = next((e for e in events if e.startswith("generation_error")), None)
-                cost = None
-                if s.price_input_per_m is not None and s.price_output_per_m is not None:
+                cost = usage.get("usd")  # the copilot prices each call itself, including cache reads and writes
+                if cost is None and s.price_input_per_m is not None and s.price_output_per_m is not None:
                     cost = (
                         usage["input_tokens"] * s.price_input_per_m + usage["output_tokens"] * s.price_output_per_m
                     ) / 1e6
@@ -577,7 +583,7 @@ def score_copilot_case(case: dict, result: dict, submitted: dict | None) -> dict
     ]
     drafted = len((submitted or {}).get("claims", []))
     unsupported_drafted = sum(not c["verified"] for c in result["checks"])
-    answerable = case["expected_case_type"] != "out_of_scope"
+    answerable = case["expected_case_type"] not in ("out_of_scope", "not_covered")
     return {
         "case_type_correct": result["case_type"] == case["expected_case_type"],
         "calculator_called": bool(result["timelines"]) if case["expect_items"] else None,
@@ -616,7 +622,7 @@ def eval_copilot(repeats: int = 1, retriever_name: str = "dense_bge") -> Path:
     ledger = budget_from_env(s)
     chunks = load_chunks(CHUNKS)
     corpus, graph, retriever = {c.id: c for c in chunks}, build_graph(chunks), make_retriever(retriever_name, chunks)
-    llm, prices = chat_model(s), (s.price_input_per_m, s.price_output_per_m)
+    llm, prices = chat_model(s), (s.price_input_per_m, s.price_output_per_m, s.price_cache_read_per_m)
     rows, stopped = [], None
     for rep in range(repeats):
         for case in load_copilot_cases():

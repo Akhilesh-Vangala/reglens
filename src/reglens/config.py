@@ -38,6 +38,7 @@ class ModelSettings:
     # USD per 1M tokens from the provider's pricing page; drive the spend caps and cost reporting
     price_input_per_m: float | None
     price_output_per_m: float | None
+    price_cache_read_per_m: float | None = None  # Anthropic cache reads (0.1x input); unset = billed at input price
 
     @classmethod
     def from_env(cls) -> ModelSettings:
@@ -45,6 +46,7 @@ class ModelSettings:
         prices = dict(
             price_input_per_m=f("PRICE_INPUT_PER_M"),
             price_output_per_m=f("PRICE_OUTPUT_PER_M"),
+            price_cache_read_per_m=f("PRICE_CACHE_READ_PER_M"),
         )
         provider = os.getenv("LLM_PROVIDER", "anthropic").lower()
         if provider == "openai":

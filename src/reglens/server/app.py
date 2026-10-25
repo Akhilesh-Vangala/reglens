@@ -349,7 +349,7 @@ def _copilot_events(case: str, request: Request):
         corpus(),
         chat_model(s),
         ledger=ledger(),
-        prices=(s.price_input_per_m, s.price_output_per_m),
+        prices=(s.price_input_per_m, s.price_output_per_m, s.price_cache_read_per_m),
     )
     t0, state, emitted = time.perf_counter(), {}, 0
     try:

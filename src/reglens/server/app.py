@@ -240,6 +240,15 @@ COPILOT_CASES = [
 ]
 
 
+@app.get("/api/copilot/recorded")
+def copilot_recorded():
+    """Real copilot runs captured with scripts/record_copilot_runs.py (model, date and commit included), so the
+    demo can show actual model output without a live key."""
+    path = ROOT / "data" / "demo" / "copilot_runs.jsonl"
+    runs = [json.loads(x) for x in path.read_text().splitlines() if x.strip()] if path.exists() else []
+    return {"runs": runs}
+
+
 @app.get("/api/graph/{chunk_id}")
 def graph_neighbors(chunk_id: str):
     c = corpus().get(chunk_id)

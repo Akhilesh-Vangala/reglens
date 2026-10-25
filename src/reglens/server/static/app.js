@@ -149,11 +149,30 @@ function renderCopilotResult(r, usage, redactions) {
   $("#copilotTimeline").innerHTML = x.timelines.map((t) => timelineView(t)).join("<hr>");
 }
 
+function beginCopilot(label) {
+  const out = $("#copilotOut"); out.classList.remove("hidden");
+  out.innerHTML = `<span class="spinner"></span> <span class="muted">${esc(label)}</span>`;
+  $("#trace").innerHTML = `<ul class="trace"></ul>`; resetRail(); rail("guard", "active");
+}
+
+// One handler for live server-sent events and for replays of recorded runs.
+function onCopilotEvent(ev) {
+  if (ev.type === "start") { rail("guard", "done"); rail("agent", "active"); }
+  else if (ev.type === "step") {
+    $("#trace ul").insertAdjacentHTML("beforeend", traceItem(ev.step));
+    if (ev.step.node === "agent") { rail("agent", "active"); rail("tools", ""); }
+    else { rail("agent", "done"); rail("tools", ev.step.tool === "submit_answer" ? "done" : "active"); if (ev.step.tool === "submit_answer") rail("verify", "active"); }
+  } else if (ev.type === "result") {
+    ["agent", "tools"].forEach((s) => rail(s, "done"));
+    rail("verify", ev.result.events.some((e) => !e.startsWith("handoff")) ? "fail" : "done");
+    rail("final", ev.result.draft_withheld ? "fail" : "done");
+    renderCopilotResult(ev.result, ev.usage, ev.redactions);
+  } else if (ev.type === "error") throw new Error(ev.detail);
+}
+
 async function runCopilot() {
   const text = $("#case").value.trim(); if (!text) return;
-  const out = $("#copilotOut"); out.classList.remove("hidden");
-  out.innerHTML = `<span class="spinner"></span> <span class="muted">Working…</span>`;
-  $("#trace").innerHTML = `<ul class="trace"></ul>`; resetRail(); rail("guard", "active");
+  beginCopilot("Working…"); $("#replayNote").textContent = "";
   $("#runCopilot").disabled = true;
   try {
     const resp = await fetch("/api/copilot/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ case: text }) });
@@ -165,24 +184,32 @@ async function runCopilot() {
       let i;
       while ((i = buf.indexOf("\n\n")) >= 0) {
         const block = buf.slice(0, i); buf = buf.slice(i + 2);
-        const data = block.split("\n").find((l) => l.startsWith("data: ")); if (!data) continue;
-        const ev = JSON.parse(data.slice(6));
-        if (ev.type === "start") { rail("guard", "done"); rail("agent", "active"); }
-        else if (ev.type === "step") {
-          $("#trace ul").insertAdjacentHTML("beforeend", traceItem(ev.step));
-          if (ev.step.node === "agent") { rail("agent", "active"); rail("tools", ""); }
-          else { rail("agent", "done"); rail("tools", ev.step.tool === "submit_answer" ? "done" : "active"); if (ev.step.tool === "submit_answer") rail("verify", "active"); }
-        } else if (ev.type === "result") {
-          ["agent", "tools"].forEach((s) => rail(s, "done"));
-          rail("verify", ev.result.events.some((e) => !e.startsWith("handoff")) ? "fail" : "done");
-          rail("final", ev.result.draft_withheld ? "fail" : "done");
-          renderCopilotResult(ev.result, ev.usage, ev.redactions);
-        } else if (ev.type === "error") throw new Error(ev.detail);
+        const data = block.split("\n").find((l) => l.startsWith("data: ")); if (data) onCopilotEvent(JSON.parse(data.slice(6)));
       }
     }
-  } catch (e) { out.innerHTML = `<div class="err">${esc(e.message)}</div>`; $$(".stage.active").forEach((s) => s.classList.replace("active", "fail")); }
+  } catch (e) { $("#copilotOut").innerHTML = `<div class="err">${esc(e.message)}</div>`; $$(".stage.active").forEach((s) => s.classList.replace("active", "fail")); }
   finally { $("#runCopilot").disabled = !META?.answering.enabled; }
 }
+
+// Recorded runs: real model output captured by scripts/record_copilot_runs.py, replayed at its recorded pace.
+let RECORDED = [];
+async function loadRecorded() {
+  RECORDED = (await api("/api/copilot/recorded")).runs;
+  $("#recorded").innerHTML = RECORDED.map((r, i) => `<button data-i="${i}">▶ ${esc(r.title)}</button>`).join("");
+  $("#recordedWrap").classList.toggle("hidden", !RECORDED.length);
+}
+async function replay(i) {
+  const run = RECORDED[i];
+  $("#case").value = run.case;
+  $("#replayNote").innerHTML = `Replaying a <b>recorded real run</b> · ${esc(run.model)} · ${esc(run.recorded_at)} · commit ${esc(run.commit)}. Nothing is sent to a model.`;
+  beginCopilot("Replaying…");
+  for (const ev of run.events) {
+    const ms = ev.type === "step" ? Math.min(900, Math.max(250, (ev.step.ms || 300) / 6)) : 250;
+    await new Promise((r) => setTimeout(r, ms));
+    onCopilotEvent(ev);
+  }
+}
+$("#recorded").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) replay(Number(b.dataset.i)); });
 $("#runCopilot").addEventListener("click", runCopilot);
 
 // ---------------------------------------------------------------- deadline calculator
@@ -363,4 +390,5 @@ addTransfer("2026-10-20", "400");
 show(location.hash.slice(1) || "copilot");
 loadMeta().catch((e) => { $("#status span").textContent = "Offline: " + e.message; });
 loadChecker().catch(() => {});
+loadRecorded().catch(() => {});
 runDeadlines();

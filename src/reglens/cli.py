@@ -30,12 +30,14 @@ def main() -> None:
     a.add_argument("question")
     a.add_argument("--retriever", default="dense_bge")
     e = sub.add_parser("eval")
-    e.add_argument("kind", choices=["retrieval", "answers", "stores", "copilot"])
+    e.add_argument("kind", choices=["retrieval", "answers", "stores", "copilot", "rescore"])
     e.add_argument("--retrievers", nargs="+", default=["bm25", "dense_bge", "hybrid_bge", "dense_bge+rerank"])
     e.add_argument("--configs", nargs="+", default=["A_closed_book", "B_rag_no_verify", "C_rag_verified", "D_copilot"])
     e.add_argument("--retriever", default="dense_bge")
     e.add_argument("--repeats", type=int, default=1)
     e.add_argument("--dry-run", action="store_true", help="answers: print the upper-bound cost, call no model")
+    e.add_argument("--k", type=int, default=8, help="answers: passages retrieved per question")
+    e.add_argument("--report", help="rescore: report directory to recompute from its stored rows")
     args = ap.parse_args()
 
     if args.cmd == "build":
@@ -99,6 +101,12 @@ def main() -> None:
                 print(json.dumps(estimate_copilot(args.repeats), indent=2))
             else:
                 eval_copilot(args.repeats)
+        elif args.kind == "rescore":
+            from pathlib import Path
+
+            from reglens.eval.run import rescore
+
+            print(rescore(Path(args.report)))
         elif args.kind == "stores":
             from reglens.eval.run import eval_stores
 
@@ -109,7 +117,7 @@ def main() -> None:
 
                 print(json.dumps(estimate_answers(args.configs, args.retriever, args.repeats), indent=2))
             else:
-                eval_answers(args.configs, args.retriever, args.repeats)
+                eval_answers(args.configs, args.retriever, args.repeats, k=args.k)
 
 
 if __name__ == "__main__":

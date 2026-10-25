@@ -359,6 +359,27 @@ def summarize(rows: list[dict], configs: list[str]) -> dict:
                 else None
             ),
         }
+
+        # Like-for-like metrics. answer_accuracy is stricter for retrieval configs (it also needs a verified quote from
+        # a gold paragraph), so these three put every configuration on the same footing.
+        def per_q(rows_, fn):
+            g: dict[str, list[float]] = {}
+            for r in rows_:
+                g.setdefault(r["id"], []).append(float(fn(r)))
+            return [statistics.fmean(v) for v in g.values()]
+
+        s["right_fact"] = _mean_ci(per_q(ans, lambda r: r["status"] == "answered" and r.get("facts_present", False)))
+        s["verifiably_grounded"] = (
+            None
+            if cfg == "A_closed_book"
+            else _mean_ci(per_q(ans, lambda r: r["status"] == "answered" and r.get("grounded_in_gold", False)))
+        )
+        s["declined_correctly"] = _mean_ci(
+            per_q(
+                [r for r in rs if r["expected_status"] != "answered"],
+                lambda r: r["status"] in ("refused", "not_in_corpus"),
+            )
+        )
         if cfg == "A_closed_book":
             fab = sum(r.get("n_fabricated_citations", 0) for r in rs)
             s["fabricated_citation_rate"] = round(fab / claims, 3) if claims else None
@@ -380,6 +401,30 @@ def summarize(rows: list[dict], configs: list[str]) -> dict:
         f"{a}->{b}": paired_delta(per_item[a], per_item[b]) for a, b in pairs if a in per_item and b in per_item
     }
     return out
+
+
+def rescore(report_dir: Path) -> Path:
+    """Recompute summary.json and REPORT.md from a report's stored per-question rows, with no model calls. Used when
+    a metric is added: the raw results and their provenance stay exactly as recorded."""
+    rows = [json.loads(x) for x in (report_dir / "results.jsonl").read_text().splitlines() if x.strip()]
+    old = json.loads((report_dir / "summary.json").read_text())
+    summary = summarize(rows, list(old["configs"]))
+    for key in ("stopped", "spend_ledger", "provenance"):
+        if key in old:
+            summary[key] = old[key]
+    summary["rescored"] = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "by_commit": _git_commit()}
+    (report_dir / "summary.json").write_text(json.dumps(summary, indent=2))
+    (report_dir / "REPORT.md").write_text(render(summary))
+    return report_dir
+
+
+def _git_commit() -> str:
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=ROOT
+        ).stdout.strip()
+    except OSError:
+        return "unknown"
 
 
 def render(summary: dict) -> str:
@@ -406,6 +451,22 @@ def render(summary: dict) -> str:
             f"{f(s['not_in_corpus_accuracy'])} | {f(s['escalation_accuracy'])} | "
             f"{'n/a' if uns is None else f'{uns:.1%}'} | {'n/a' if fab is None else f'{fab:.1%}'} | "
             f"{s['latency_s_median']:.1f} | {'not priced' if cost is None else f'${cost:.5f}'} |"
+        )
+    lines += [
+        "",
+        "## Like for like",
+        "",
+        "Answer accuracy above is stricter for retrieval configurations (it also requires a verified quote from a gold "
+        "paragraph). These columns use one definition for every configuration.",
+        "",
+        "| Config | Right fact | Verifiably grounded | Declined when it should |",
+        "|---|---|---|---|",
+    ]
+    for cfg, s in summary["configs"].items():
+        vg = s.get("verifiably_grounded")
+        lines.append(
+            f"| {cfg} | {f(s['right_fact'])} | {'n/a (no sources)' if vg is None else f(vg)} | "
+            f"{f(s['declined_correctly'])} |"
         )
     lines += [
         "",

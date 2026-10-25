@@ -1,0 +1,26 @@
+# Weekly: has any in-scope regulation been amended since the pinned eCFR snapshot? A failure means answers may
+# cite superseded text: rebuild the corpus (reglens build --refetch), re-run golden tests and evals, redeploy.
+name: law-watch
+on:
+  schedule: [{cron: "17 13 * * 1"}]  # Mondays 13:17 UTC
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: {python-version: "3.12"}
+      - run: pip install httpx
+      - run: PYTHONPATH=src python -c "from reglens.corpus.freshness import check; import json, sys; from pathlib import Path; r = check(Path('data/raw/manifest.json')); print(json.dumps(r, indent=2)); open('report.json','w').write(json.dumps(r)); sys.exit(0 if r['current'] else 1)"
+      - if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r = json.load(open("report.json"))
+          print(f"## Law watch: snapshot {r['as_of']} is {'current' if r['current'] else 'OUT OF DATE'}\n")
+          print("| Part | Latest in-scope amendment | Amended since snapshot |\n|---|---|---|")
+          for p, v in r["parts"].items():
+              changed = ", ".join(f"{x['identifier']} ({x['amendment_date']})" for x in v["amended_since_snapshot"]) or "none"
+              print(f"| {p} | {v['latest_amendment']} | {changed} |")
+          PY

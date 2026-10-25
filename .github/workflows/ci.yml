@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
-      - run: ruff check src tests api scripts
+      - run: ruff check src tests api && ruff format --check src tests api
       - name: wait for neo4j
         run: for i in $(seq 1 60); do nc -z localhost 7687 && break; sleep 2; done
       - run: pytest -q -rs

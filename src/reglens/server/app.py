@@ -9,6 +9,7 @@ POST /api/verify            run the deterministic quote verifier on a claim agai
 POST /api/timeline          deterministic Reg E / Reg Z deadline and liability calculator
 POST /api/ask               governed RAG pipeline (model)
 POST /api/copilot           member-service copilot agent (model)
+POST /api/copilot/stream    same, as server-sent events: one event per agent turn / tool call, then the result
 GET  /api/evals             latest evaluation summaries
 
 Everything except /api/ask and /api/copilot is deterministic and needs no credentials. The two model endpoints
@@ -19,13 +20,16 @@ answer 503/429 with the reason instead of failing.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
+import uuid
 from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from reglens.config import ROOT, STATE_DIR, ModelSettings
@@ -33,13 +37,63 @@ from reglens.corpus.chunk import Chunk
 from reglens.guard import SpendLedger, redact
 from reglens.retrieval import BM25, load_chunks
 from reglens.server.limits import Limiter, LimitExceeded, client_id
+from reglens.timeline import RULES
 from reglens.verify import check_claims, normalize
 
 CHUNKS = ROOT / "data" / "processed" / "chunks.jsonl"
 STATIC = Path(__file__).parent / "static"
 REPORTS = ROOT / "evals" / "reports"
 
-app = FastAPI(title="RegLens", version="0.2.0")
+app = FastAPI(title="RegLens", version="1.0.0", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
+log = logging.getLogger("reglens.http")
+if not log.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(message)s"))
+    log.addHandler(_h)
+    log.setLevel(logging.INFO)
+
+SECURITY_HEADERS = {
+    # no inline script; inline style attributes only (chart widths), never <style> blocks
+    "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self'; "
+    "style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
+    "base-uri 'none'; form-action 'none'",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+    "x-frame-options": "DENY",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
+@app.middleware("http")
+async def observe(request: Request, call_next):
+    """Request id, JSON access log and security headers. Logs the path only: query strings and bodies can carry
+    member text, which must not reach logs."""
+    rid = request.headers.get("x-request-id", "")[:64] or uuid.uuid4().hex[:16]
+    t0 = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:  # noqa: BLE001  (never leak a traceback to the client)
+        log.exception(json.dumps({"rid": rid, "path": request.url.path, "event": "unhandled_error"}))
+        response = JSONResponse({"detail": "internal error", "request_id": rid}, status_code=500)
+    response.headers.update({"x-request-id": rid, **SECURITY_HEADERS})
+    if request.url.path.startswith("/api/docs"):  # Swagger UI loads its own scripts
+        del response.headers["content-security-policy"]
+    log.info(
+        json.dumps(
+            {
+                "rid": rid,
+                "method": request.method,
+                "path": request.url.path,
+                "status": response.status_code,
+                "ms": round(1000 * (time.perf_counter() - t0), 1),
+            }
+        )
+    )
+    return response
+
+
+PUBLIC_RETRIEVERS = {"dense_bge", "graph_bge_s1", "hybrid_bge", "bm25", "qdrant_bge"}
 
 
 @lru_cache(maxsize=1)
@@ -157,6 +211,7 @@ def meta():
         "examples": examples,
         "cases": COPILOT_CASES,
         "graph": graph().stats(),
+        "rules": len(RULES),
     }
 
 
@@ -219,7 +274,18 @@ def verify(req: VerifyRequest):
         raise HTTPException(404, "unknown chunk")
     [chk] = check_claims([{"chunk_id": c.id, "quote": req.quote}], {c.id: c} if req.retrieved else {}, corpus())
     src = c.source_text()
-    return {**chk.__dict__, "span": _span(src, req.quote) if chk.verified else None, "source": src}
+    nq, ns = normalize(req.quote), normalize(src)
+    lo, hi = 0, len(nq)  # longest prefix of the quote present in the passage: substring-ness is monotone in length
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        lo, hi = (mid, hi) if nq[:mid] in ns else (lo, mid - 1)
+    return {
+        **chk.__dict__,
+        "span": _span(src, req.quote) if chk.verified else None,
+        "source": src,
+        "normalized_quote": nq,
+        "matched_prefix": lo,
+    }
 
 
 @app.post("/api/timeline")
@@ -241,9 +307,33 @@ class CopilotRequest(BaseModel):
 
 @app.post("/api/copilot")
 def copilot(req: CopilotRequest, request: Request):
+    events = list(_copilot_events(req.case, request))
+    final = events[-1]
+    if final["type"] == "error":
+        raise HTTPException(502, final["detail"])
+    return {**final, "steps": [e["step"] for e in events if e["type"] == "step"]}
+
+
+@app.post("/api/copilot/stream")
+def copilot_stream(req: CopilotRequest, request: Request):
+    events = _copilot_events(req.case, request)
+    first = next(events)  # admission errors surface as HTTP status codes, before the stream opens
+    sse = (f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in _chain(first, events))
+    return StreamingResponse(sse, media_type="text/event-stream", headers={"cache-control": "no-store"})
+
+
+def _chain(first, rest):
+    yield first
+    yield from rest
+
+
+def _copilot_events(case: str, request: Request):
+    """Run the copilot graph and yield {"type": "step"} per agent turn or tool call, then one "result" (or
+    "error"). The spend reservation is always settled, even if the run fails midway."""
     from reglens.copilot import MAX_STEPS, build_copilot, chat_model
 
     day, reserved, s = _admit(request, MAX_STEPS, 12_000, 4_000)
+    yield {"type": "start", "model": model_status(), "max_steps": MAX_STEPS}
     app_ = build_copilot(
         retriever(DEFAULT_RETRIEVER),
         graph(),
@@ -252,25 +342,40 @@ def copilot(req: CopilotRequest, request: Request):
         ledger=ledger(),
         prices=(s.price_input_per_m, s.price_output_per_m),
     )
-    t0 = time.perf_counter()
-    state = app_.invoke({"case": req.case})
-    actual = state.get("usage", {}).get("usd", reserved)
-    limiter().settle(day, reserved, actual)
-    r = state["result"]
-    for c in r["claims"]:
-        c["span"] = _span(c["source"], c["quote"])
-    return {
-        "result": r,
-        "steps": state["steps"],
-        "usage": state["usage"],
-        "redactions": state["redactions"],
-        "seconds": round(time.perf_counter() - t0, 2),
-        "model": model_status(),
-    }
+    t0, state, emitted = time.perf_counter(), {}, 0
+    try:
+        for update in app_.stream({"case": case}, stream_mode="updates"):
+            for delta in update.values():
+                state.update(delta or {})
+            steps = state.get("steps", [])
+            for step in steps[emitted:]:
+                yield {"type": "step", "step": step}
+            emitted = len(steps)
+        r = state["result"]
+        for c in r["claims"]:
+            c["span"] = _span(c["source"], c["quote"])
+        yield {
+            "type": "result",
+            "result": r,
+            "usage": state["usage"],
+            "redactions": state["redactions"],
+            "seconds": round(time.perf_counter() - t0, 2),
+            "model": model_status(),
+        }
+    except Exception as exc:  # noqa: BLE001  (reported to the client as a terminal event)
+        log.exception(json.dumps({"event": "copilot_error"}))
+        yield {"type": "error", "detail": f"copilot failed: {type(exc).__name__}"}
+    finally:
+        # settle to what the provider actually billed (measured per call), success or failure
+        limiter().settle(day, reserved, state.get("usage", {}).get("usd", 0.0))
 
 
 @app.get("/api/search")
 def search(q: str, k: int = 8, retriever_name: str = DEFAULT_RETRIEVER):
+    if retriever_name not in PUBLIC_RETRIEVERS:
+        raise HTTPException(400, f"retriever must be one of {sorted(PUBLIC_RETRIEVERS)}")
+    if not 1 <= len(q) <= 500:
+        raise HTTPException(400, "query must be 1-500 characters")
     r = redact(q)
     t0 = time.perf_counter()
     try:

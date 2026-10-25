@@ -4,583 +4,243 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RegLens</title>
-<meta name="description" content="Governed member-service copilot over consumer-banking regulations. Every claim is a verified verbatim quote.">
-<style>
-:root{--bg:#f6f6f3;--panel:#fff;--ink:#1b1b19;--muted:#696962;--faint:#9a9a92;--line:#e3e2dc;--accent:#1d5fc4;--accent-soft:#e8f0fc;--ok:#1d7a4c;--ok-soft:#e6f4ec;--warn:#9a5a00;--warn-soft:#fbf1e2;--bad:#b3261e;--bad-soft:#fbeae8;--hl:#ffef9e;--code:#f2f1ec;--shadow:0 1px 2px rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.04)}
-@media (prefers-color-scheme:dark){:root{--bg:#131312;--panel:#1c1c1a;--ink:#ecebe5;--muted:#a3a29a;--faint:#77766f;--line:#2e2d2a;--accent:#7fa9f0;--accent-soft:#1d2a40;--ok:#5cc394;--ok-soft:#16291f;--warn:#e6a64c;--warn-soft:#2e2414;--bad:#f0857a;--bad-soft:#331a18;--hl:#5c4c00;--code:#252422;--shadow:none}}
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
-a{color:var(--accent)}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em}
-header{background:var(--panel);border-bottom:1px solid var(--line)}
-.wrap{max-width:1320px;margin:0 auto;padding:0 24px}
-.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 0 12px;flex-wrap:wrap}
-h1{margin:0;font-size:21px;letter-spacing:-.015em}
-.tag{margin:3px 0 0;color:var(--muted);font-size:13.5px;max-width:760px}
-.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12.5px;border:1px solid var(--line);background:var(--bg);white-space:nowrap}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--faint)}
-.dot.on{background:var(--ok)}.dot.off{background:var(--warn)}
-.chips{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:12px}
-.chip{display:inline-flex;gap:4px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;font-size:12px;color:var(--muted);background:var(--bg)}
-.chip b{color:var(--ink);font-weight:600}
-nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
-nav button{border:0;background:none;color:var(--muted);font:inherit;font-size:14px;padding:10px 14px;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
-nav button[aria-selected=true]{color:var(--ink);border-color:var(--accent);font-weight:600}
-main.wrap{padding-top:18px;padding-bottom:48px}
-.grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
-@media (max-width:960px){.grid{grid-template-columns:1fr}.wrap{padding:0 16px}}
-.stack{display:grid;gap:16px;align-content:start}
-section.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
-h2{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
-h3{margin:14px 0 6px;font-size:14px}
-p.lead{margin:0 0 12px;color:var(--muted);font-size:14px}
-textarea,input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
-textarea{width:100%;min-height:96px;resize:vertical}
-input[type=date],input[type=number]{padding:6px 8px}
-button.btn{font:inherit;font-size:14px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:7px 14px;cursor:pointer}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-button:disabled{opacity:.45;cursor:not-allowed}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
-.examples{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.examples button{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer;text-align:left}
-.examples button:hover{color:var(--ink);border-color:var(--faint)}
-.muted{color:var(--muted);font-size:13.5px}
-.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid currentColor}
-.b-ok{color:var(--ok)}.b-warn{color:var(--warn)}.b-bad{color:var(--bad)}.b-acc{color:var(--accent)}
-.banner{margin:10px 0;padding:10px 12px;border-radius:8px;font-size:14px;border-left:4px solid var(--warn);background:var(--warn-soft)}
-.banner.info{border-color:var(--accent);background:var(--accent-soft)}
-.banner.bad{border-color:var(--bad);background:var(--bad-soft)}
-.banner.ok{border-color:var(--ok);background:var(--ok-soft)}
-.reply{white-space:pre-wrap;background:var(--code);border-radius:8px;padding:12px;font-size:15px;margin:8px 0}
-.claim{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0}
-.claim .cit{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--accent)}
-.claim blockquote{margin:6px 0 0;padding:6px 10px;border-left:3px solid var(--ok);background:var(--code);font-size:13.5px}
-details summary{cursor:pointer;color:var(--muted);font-size:13px;margin-top:6px}
-.src{white-space:pre-wrap;background:var(--code);padding:10px;border-radius:8px;margin-top:6px;max-height:280px;overflow:auto;font-size:13.5px}
-mark{background:var(--hl);color:inherit;padding:0 1px;border-radius:2px}
-table{width:100%;border-collapse:collapse;font-size:13.5px}
-th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-th{color:var(--muted);font-weight:500;font-size:12.5px}
-td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.ticket{border:1px dashed var(--faint);border-radius:10px;padding:12px}
-.ticket .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
-.trace{list-style:none;margin:0;padding:0;position:relative}
-.trace li{position:relative;padding:6px 0 6px 22px;font-size:13.5px}
-.trace li::before{content:"";position:absolute;left:6px;top:13px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
-.trace li.tool::before{background:var(--ok)}
-.trace li.err::before{background:var(--bad)}
-.trace li::after{content:"";position:absolute;left:9.5px;top:22px;bottom:-8px;width:1px;background:var(--line)}
-.trace li:last-child::after{display:none}
-.hit{padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;cursor:pointer}
-.hit:last-child{border:0}
-.hit:hover .cit{text-decoration:underline}
-.hit .cit{font-family:ui-monospace,Menlo,monospace;color:var(--accent);font-size:12.5px}
-.hit .meta{color:var(--faint);font-size:12px}
-.hit.sel{background:var(--accent-soft);margin:0 -8px;padding:9px 8px;border-radius:6px}
-.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
-.formgrid label{display:grid;gap:4px;font-size:12.5px;color:var(--muted)}
-.chk{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
-.verdict{font-size:18px;font-weight:600;margin:6px 0}
-.bars{display:grid;gap:10px}
-.bar{display:grid;grid-template-columns:170px 1fr 58px;gap:10px;align-items:center;font-size:13px}
-.bar .track{position:relative;height:16px;background:var(--code);border-radius:4px}
-.bar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--accent);opacity:.85}
-.bar .ci{position:absolute;top:7px;height:2px;background:var(--ink);opacity:.55}
-.bar.best .fill{background:var(--ok)}
-.bar .lbl{font-family:ui-monospace,Menlo,monospace;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.stat div{background:var(--code);border-radius:8px;padding:10px 12px}
-.stat b{display:block;font-size:20px;letter-spacing:-.01em}
-.stat span{color:var(--muted);font-size:12.5px}
-svg text{font-family:inherit}
-.diagram{width:100%;height:auto}
-.hidden{display:none}
-.err{color:var(--bad)}
-.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
-@keyframes spin{to{transform:rotate(360deg)}}
-footer{color:var(--faint);font-size:12.5px;padding:24px 0}
-section.card{min-width:0;overflow-wrap:anywhere}
-.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-@media (max-width:640px){
-  td.num{white-space:normal}.formgrid{grid-template-columns:1fr}
-  .bar{grid-template-columns:110px 1fr 40px}
-  section.card{padding:14px}
-  h1{font-size:19px}
-}
-</style>
+<meta name="description" content="Member-service copilot grounded in consumer-banking regulations. Every claim is a verified verbatim quote; every date comes from a calculator.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Ccircle cx='14' cy='14' r='7' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M19 19l6 6' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
 </head>
 <body>
-<header>
+<header class="hero">
   <div class="wrap">
-    <div class="top">
-      <div>
+    <div class="toprow">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/><path d="M8 10.5h5M8 8h3"/></svg></div>
         <h1>RegLens</h1>
-        <p class="tag">A member-service copilot for credit-union staff, grounded in the federal consumer-banking
-          regulations. The model proposes; deterministic code decides: every claim is a verbatim quote checked against
-          the pinned regulation text, every date comes from a calculator, and anything unsupported goes to a person.</p>
       </div>
-      <span class="pill" id="status"><span class="dot"></span><span>Loading…</span></span>
+      <span class="status" id="status"><i></i><span>Connecting…</span></span>
     </div>
-    <div class="chips" id="prov"></div>
-    <nav role="tablist" id="tabs">
-      <button role="tab" data-tab="copilot" aria-selected="true">Copilot</button>
-      <button role="tab" data-tab="deadlines">Deadline calculator</button>
-      <button role="tab" data-tab="checker">Try to fool the checker</button>
-      <button role="tab" data-tab="explore">Search &amp; citation graph</button>
-      <button role="tab" data-tab="ask">Q&amp;A pipeline</button>
-      <button role="tab" data-tab="results">Measured results</button>
-      <button role="tab" data-tab="how">How it works</button>
+    <p class="tag">A member-service copilot for credit-union staff, grounded in the federal consumer-banking regulations.
+      <b>The model proposes; deterministic code decides.</b> Every claim is a verbatim quote checked against the pinned
+      regulation text, every date and dollar limit comes from a calculator, and anything unsupported goes to a person.</p>
+    <div class="kpis" id="kpis">
+      <div class="kpi"><b>–</b><span>regulation paragraphs</span></div><div class="kpi"><b>–</b><span>citation-graph edges</span></div>
+      <div class="kpi"><b>–</b><span>retrieval recall@5</span></div><div class="kpi"><b>–</b><span>calculator rules verified vs law</span></div>
+    </div>
+    <div class="prov" id="prov"></div>
+    <nav class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-tab="copilot" aria-selected="true"><span class="sw" style="background:#818cf8"></span>Copilot</button>
+      <button role="tab" data-tab="deadlines"><span class="sw" style="background:#fbbf24"></span>Deadline calculator</button>
+      <button role="tab" data-tab="checker"><span class="sw" style="background:#34d399"></span>Try to fool the checker</button>
+      <button role="tab" data-tab="explore"><span class="sw" style="background:#a78bfa"></span>Citation graph</button>
+      <button role="tab" data-tab="ask"><span class="sw" style="background:#38bdf8"></span>Q&amp;A pipeline</button>
+      <button role="tab" data-tab="results"><span class="sw" style="background:#fff"></span>Measured results</button>
+      <button role="tab" data-tab="how"><span class="sw" style="background:#cbd5e1"></span>How it works</button>
     </nav>
   </div>
 </header>
 
 <main class="wrap">
 
-<!-- COPILOT -->
-<div data-panel="copilot">
+<section data-panel="copilot">
   <div class="grid">
     <div class="stack">
-      <section class="card">
+      <div class="card accent-indigo">
         <h2>Member case</h2>
-        <p class="lead">Paste what the member said. The agent searches the regulations, follows the citation graph,
-          computes the deadlines, drafts a reply with verified citations, and opens a handoff ticket.</p>
+        <p class="lead">Paste what the member said. The agent searches the regulations, opens the official
+          interpretations through the citation graph, computes the deadlines, drafts a reply with verified citations
+          and opens a handoff ticket.</p>
         <textarea id="case" placeholder="e.g. My debit card was stolen Tuesday and I called the next morning. There's a $400 charge I didn't make."></textarea>
-        <div class="row">
-          <button class="btn primary" id="runCopilot">Run copilot</button>
-          <span class="muted" id="copilotNote"></span>
-        </div>
-        <div class="examples" id="cases"></div>
-      </section>
-      <section class="card hidden" id="copilotOut"></section>
+        <div class="row"><button class="btn primary" id="runCopilot">Run copilot</button><span class="muted" id="copilotNote"></span></div>
+        <div class="chips" id="cases"></div>
+      </div>
+      <div class="card hidden" id="copilotOut"></div>
     </div>
     <div class="stack">
-      <section class="card">
-        <h2>Agent trace</h2>
-        <div id="trace" class="muted">Each model turn and tool call appears here with its latency, arguments and
-          result, followed by what the deterministic finalize step accepted or rejected.</div>
-      </section>
-      <section class="card hidden" id="timelineCard">
-        <h2>Deadlines (calculator, not model)</h2>
-        <div id="copilotTimeline"></div>
-      </section>
+      <div class="card">
+        <h2>Pipeline</h2>
+        <p class="lead">Lights up live as the agent works (server-sent events).</p>
+        <div class="rail" id="rail">
+          <div class="stage" data-stage="guard"><b>Guard</b>mask PII</div>
+          <div class="stage" data-stage="agent"><b>Agent</b>plan + tools</div>
+          <div class="stage" data-stage="tools"><b>Tools</b>search · graph · dates</div>
+          <div class="stage" data-stage="verify"><b>Verify</b>quotes · dates · $</div>
+          <div class="stage" data-stage="final"><b>Finalize</b>send · withhold</div>
+        </div>
+        <h3>Agent trace</h3>
+        <div id="trace" class="muted">Each model turn and tool call appears here as it happens, then what the
+          deterministic finalize step accepted or rejected.</div>
+      </div>
+      <div class="card accent-amber hidden" id="timelineCard"><h2>Deadlines <span class="pill p-amber">calculator, not model</span></h2><div id="copilotTimeline"></div></div>
     </div>
   </div>
-</div>
+</section>
 
-<!-- DEADLINES -->
-<div data-panel="deadlines" class="hidden">
+<section data-panel="deadlines" class="hidden">
   <div class="grid">
-    <section class="card">
+    <div class="card accent-amber">
       <h2>Regulation E / Z deadline calculator</h2>
-      <p class="lead">The same function the copilot calls. Pure code on a Federal Reserve business-day calendar;
-        every rule it applies is quoted from the regulation and tested verbatim against it. No model, no key.</p>
+      <p class="lead">The function the copilot calls. Plain code on a Federal Reserve business-day calendar; every rule
+        it applies is quoted from the regulation and tested verbatim against it. No model, no key.</p>
       <div class="formgrid">
-        <label>Case type
-          <select id="dl_type">
-            <option value="unauthorized_eft">Unauthorized debit (Reg E)</option>
-            <option value="eft_error">EFT error (Reg E)</option>
-            <option value="credit_card_billing_error">Card billing error (Reg Z)</option>
-          </select></label>
+        <label>Case type<select id="dl_type">
+          <option value="unauthorized_eft">Unauthorized debit (Reg E)</option>
+          <option value="eft_error">EFT error (Reg E)</option>
+          <option value="credit_card_billing_error">Card billing error (Reg Z)</option></select></label>
         <label>Member notified the credit union<input type="date" id="dl_notified" value="2026-10-21"></label>
-        <label data-for="unauthorized_eft">Learned card was lost/stolen<input type="date" id="dl_learned" value="2026-10-20"></label>
-        <label>Statement sent (if relevant)<input type="date" id="dl_statement"></label>
+        <label>Learned card was lost / stolen<input type="date" id="dl_learned" value="2026-10-20"></label>
+        <label>Statement sent<input type="date" id="dl_statement"></label>
       </div>
       <h3>Unauthorized transfers</h3>
       <div id="dl_transfers"></div>
       <div class="row">
-        <button class="btn" id="dl_add">Add transfer</button>
-        <label class="chk"><input type="checkbox" id="dl_new"> New account (first 30 days)</label>
-        <label class="chk"><input type="checkbox" id="dl_pos"> Point-of-sale or foreign-initiated</label>
-        <label class="chk"><input type="checkbox" id="dl_unauth"> Unauthorized credit card use</label>
+        <button class="btn" id="dl_add">+ transfer</button>
+        <label class="check"><input type="checkbox" id="dl_new"> new account (first 30 days)</label>
+        <label class="check"><input type="checkbox" id="dl_pos"> point-of-sale / foreign</label>
+        <label class="check"><input type="checkbox" id="dl_unauth"> unauthorized card use</label>
       </div>
-      <div class="row"><button class="btn primary" id="dl_run">Calculate</button></div>
-    </section>
-    <section class="card"><h2>Result</h2><div id="dl_out" class="muted">Calculate to see each deadline, the rule it
-      comes from and the exact regulation text.</div></section>
+      <div class="chips" id="dl_presets"></div>
+      <div class="row"><button class="btn amber" id="dl_run">Calculate</button></div>
+    </div>
+    <div class="card accent-amber"><h2>Result</h2><div id="dl_out" class="muted"></div></div>
   </div>
-</div>
+</section>
 
-<!-- CHECKER -->
-<div data-panel="checker" class="hidden">
+<section data-panel="checker" class="hidden">
   <div class="grid">
-    <section class="card">
+    <div class="card accent-emerald">
       <h2>Try to fool the checker</h2>
-      <p class="lead">This is the gate every answer passes through. A claim survives only if its quote appears
-        word for word (after whitespace and quote-mark normalization) in a passage that was actually retrieved for the
-        question. Edit the quote and see what gets through.</p>
-      <label class="muted">Passage
-        <select id="ck_passage" style="width:100%;margin-top:4px"></select></label>
-      <div class="src" id="ck_source" style="margin-top:10px"></div>
-      <label class="muted" style="display:block;margin-top:12px">Quote the model claims is in this passage
-        <textarea id="ck_quote" style="min-height:70px;margin-top:4px"></textarea></label>
-      <div class="row">
-        <label class="chk"><input type="checkbox" id="ck_retrieved" checked> Passage was retrieved for this question</label>
-        <button class="btn primary" id="ck_run">Check</button>
-      </div>
-      <div class="examples" id="ck_presets"></div>
-    </section>
-    <section class="card"><h2>Verdict</h2><div id="ck_out" class="muted">Pick a preset or write your own quote.</div></section>
+      <p class="lead">The gate every answer passes through. A claim survives only if its quote appears word for word
+        (after whitespace and quote-mark normalization) in a passage retrieved for the question, and is at least 25
+        characters. Edit the quote and see what gets through.</p>
+      <label class="muted">Passage <select id="ck_passage" style="width:100%;margin-top:5px"></select></label>
+      <div class="src" id="ck_source"></div>
+      <label class="muted" style="display:block;margin-top:14px">Quote the model claims is in this passage
+        <textarea id="ck_quote" style="min-height:76px;margin-top:5px"></textarea></label>
+      <div class="row"><label class="check"><input type="checkbox" id="ck_retrieved" checked> passage was retrieved for this question</label>
+        <button class="btn primary" id="ck_run">Check</button></div>
+      <div class="chips" id="ck_presets"></div>
+    </div>
+    <div class="card accent-emerald"><h2>Verdict</h2><div id="ck_out" class="muted"></div></div>
   </div>
-</div>
+</section>
 
-<!-- EXPLORE -->
-<div data-panel="explore" class="hidden">
+<section data-panel="explore" class="hidden">
   <div class="grid">
-    <section class="card">
+    <div class="card accent-sky">
       <h2>Semantic search</h2>
-      <div class="row" style="margin-top:0">
+      <div class="row" style="margin-top:8px">
         <input id="q" style="flex:1;min-width:220px" placeholder="e.g. how long can a credit union hold a deposited check">
-        <select id="ret">
-          <option value="dense_bge">dense · bge-small (best measured)</option>
-          <option value="graph_bge_s1">dense + graph expansion</option>
-          <option value="hybrid_bge">hybrid · BM25 + bge, RRF</option>
-          <option value="bm25">BM25</option>
-        </select>
+        <select id="ret"><option value="dense_bge">dense · bge (best)</option><option value="graph_bge_s1">dense + graph expansion</option>
+          <option value="hybrid_bge">hybrid · BM25 + bge</option><option value="bm25">BM25</option></select>
         <button class="btn primary" id="searchBtn">Search</button>
       </div>
-      <div id="hits" class="muted" style="margin-top:12px">Click a result to open its neighborhood in the citation
-        graph.</div>
-    </section>
-    <section class="card">
+      <div id="hits" class="muted" style="margin-top:12px">Search, then click a result to open its neighborhood.</div>
+    </div>
+    <div class="card accent-violet">
       <h2>Citation graph</h2>
-      <div id="graphOut" class="muted">2,276 edges parsed from the text itself: Official Interpretations link to the
-        rule they explain; cross-references (“§ 1005.6(b)”, “paragraph (c)(1) of this section”) link paragraphs.
-        Served from memory here; the same graph loads into Neo4j with identical neighbors for every node.</div>
-    </section>
+      <div class="legend"><span><i style="background:var(--violet)"></i>official interpretation</span><span><i style="background:var(--indigo)"></i>rule it explains</span>
+        <span><i style="background:var(--sky)"></i>cites</span><span><i style="background:var(--faint)"></i>cited by</span></div>
+      <div id="graphOut" class="muted" style="margin-top:10px">Edges are parsed from the text itself (“§ 1005.6(b)”, “paragraph (c)(1) of
+        this section”, Supplement I comments), never by a model. In Kubernetes the same graph is served from Neo4j with identical
+        neighbors for every node.</div>
+    </div>
   </div>
-</div>
+</section>
 
-<!-- ASK -->
-<div data-panel="ask" class="hidden">
+<section data-panel="ask" class="hidden">
   <div class="grid">
     <div class="stack">
-      <section class="card">
-        <h2>Question</h2>
-        <p class="lead">The fixed pipeline: guard → retrieve → generate → verify → (one retry with verifier feedback)
-          → finalize. Used in the hallucination evaluation as configuration C.</p>
+      <div class="card accent-sky">
+        <h2>Single question</h2>
+        <p class="lead">The fixed pipeline: guard → retrieve → generate → verify → one retry with verifier feedback →
+          finalize. Configuration C of the hallucination evaluation.</p>
         <textarea id="askq" placeholder="e.g. If the credit union can't finish investigating my error claim in 10 business days, what happens?"></textarea>
         <div class="row"><button class="btn primary" id="askBtn">Answer with citations</button><span class="muted" id="askNote"></span></div>
-        <div class="examples" id="examples"></div>
-      </section>
-      <section class="card hidden" id="askOut"></section>
+        <div class="chips" id="examples"></div>
+      </div>
+      <div class="card hidden" id="askOut"></div>
     </div>
-    <section class="card"><h2>Pipeline trace</h2><div id="askTrace" class="muted">Stages, tokens, cost and verifier results.</div></section>
+    <div class="card"><h2>Pipeline trace</h2><div id="askTrace" class="muted">Stages, tokens, cost and verifier results.</div></div>
   </div>
-</div>
+</section>
 
-<!-- RESULTS -->
-<div data-panel="results" class="hidden">
+<section data-panel="results" class="hidden">
   <div class="stack">
-    <section class="card">
+    <div class="card accent-sky">
       <h2>Retrieval: recall@5 on 33 answerable golden questions</h2>
-      <p class="lead">Bars are means, whiskers are 95% bootstrap intervals over questions. Every run records the
-        corpus hash, golden-set hash and git commit.</p>
+      <p class="lead">Means with 95% bootstrap intervals over questions. Every run records corpus hash, golden-set hash and git commit.</p>
       <div id="bars" class="bars"></div>
-      <div id="barsNote" class="muted" style="margin-top:10px"></div>
-    </section>
+      <p class="muted" id="barsNote" style="margin:14px 0 0"></p>
+    </div>
     <div class="grid">
-      <section class="card"><h2>Answer quality</h2><div id="answers" class="muted"></div></section>
-      <section class="card"><h2>Stores and graph</h2><div id="stores" class="muted"></div></section>
+      <div class="card accent-indigo"><h2>Answer quality</h2><div id="answers" class="muted"></div></div>
+      <div class="card accent-violet"><h2>Stores and graph</h2><div id="stores" class="muted"></div></div>
     </div>
   </div>
-</div>
+</section>
 
-<!-- HOW -->
-<div data-panel="how" class="hidden">
+<section data-panel="how" class="hidden">
   <div class="stack">
-    <section class="card">
+    <div class="card accent-indigo">
       <h2>Architecture</h2>
-      <svg class="diagram" viewBox="0 0 1000 330" role="img" aria-label="RegLens architecture">
-        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="currentColor"/></marker></defs>
-        <g fill="none" stroke="currentColor" stroke-width="1.2" style="color:var(--muted)">
-          <rect x="10" y="20" width="150" height="52" rx="8" fill="var(--code)"/>
-          <rect x="200" y="20" width="150" height="52" rx="8" fill="var(--code)"/>
-          <rect x="390" y="20" width="200" height="52" rx="8" fill="var(--accent-soft)"/>
-          <rect x="630" y="20" width="160" height="52" rx="8" fill="var(--ok-soft)"/>
-          <rect x="830" y="20" width="160" height="52" rx="8" fill="var(--code)"/>
-          <path d="M160 46H198" marker-end="url(#ar)"/><path d="M350 46H388" marker-end="url(#ar)"/>
-          <path d="M590 46H628" marker-end="url(#ar)"/><path d="M790 46H828" marker-end="url(#ar)"/>
-          <path d="M710 72V100H490V74" marker-end="url(#ar)" stroke-dasharray="4 3"/>
-          <rect x="375" y="150" width="230" height="40" rx="8"/><rect x="375" y="200" width="230" height="40" rx="8"/>
-          <rect x="375" y="250" width="230" height="40" rx="8"/><rect x="630" y="150" width="160" height="40" rx="8"/>
-          <path d="M470 72V148" marker-end="url(#ar)"/>
-          <rect x="10" y="150" width="340" height="140" rx="8" stroke-dasharray="4 3"/>
-          <rect x="830" y="150" width="160" height="140" rx="8" stroke-dasharray="4 3"/>
+      <svg class="diagram" viewBox="0 0 1000 310" role="img" aria-label="RegLens architecture">
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--muted)"/></marker></defs>
+        <g fill="none" stroke-width="1.5">
+          <rect x="10" y="20" width="150" height="56" rx="10" fill="var(--code)" stroke="var(--line)"/>
+          <rect x="200" y="20" width="200" height="56" rx="10" fill="var(--indigo-soft)" stroke="var(--indigo)"/>
+          <rect x="440" y="20" width="160" height="56" rx="10" fill="var(--emerald-soft)" stroke="var(--emerald)"/>
+          <rect x="640" y="20" width="160" height="56" rx="10" fill="var(--code)" stroke="var(--line)"/>
+          <rect x="840" y="20" width="150" height="56" rx="10" fill="var(--amber-soft)" stroke="var(--amber)"/>
+          <g stroke="var(--muted)"><path d="M160 48H198" marker-end="url(#ar)"/><path d="M400 48H438" marker-end="url(#ar)"/><path d="M600 48H638" marker-end="url(#ar)"/><path d="M800 48H838" marker-end="url(#ar)"/>
+          <path d="M520 76V102H330V78" marker-end="url(#ar)" stroke-dasharray="4 3"/><path d="M270 76V148" marker-end="url(#ar)"/></g>
+          <rect x="145" y="150" width="250" height="40" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
+          <rect x="145" y="200" width="250" height="40" rx="9" fill="var(--violet-soft)" stroke="var(--violet)"/>
+          <rect x="145" y="250" width="250" height="40" rx="9" fill="var(--amber-soft)" stroke="var(--amber)"/>
+          <rect x="440" y="150" width="260" height="140" rx="10" stroke="var(--line)" stroke-dasharray="5 4"/>
+          <rect x="730" y="150" width="260" height="140" rx="10" stroke="var(--line)" stroke-dasharray="5 4"/>
         </g>
         <g font-size="13" fill="var(--ink)" text-anchor="middle">
-          <text x="85" y="42" font-weight="600">guard</text><text x="85" y="60" font-size="11" fill="var(--muted)">mask SSN, card, acct</text>
-          <text x="275" y="42" font-weight="600">retrieve</text><text x="275" y="60" font-size="11" fill="var(--muted)">bge dense · Qdrant</text>
-          <text x="490" y="42" font-weight="600">model (LangGraph)</text><text x="490" y="60" font-size="11" fill="var(--muted)">structured output / tools</text>
-          <text x="710" y="42" font-weight="600">verify</text><text x="710" y="60" font-size="11" fill="var(--muted)">verbatim quotes · dates</text>
-          <text x="910" y="42" font-weight="600">finalize</text><text x="910" y="60" font-size="11" fill="var(--muted)">drop · withhold · hand off</text>
-          <text x="600" y="95" font-size="11" fill="var(--muted)">one retry with verifier feedback</text>
-          <text x="490" y="175">search_regulations</text><text x="490" y="225">related_paragraphs → graph</text>
-          <text x="490" y="275">compute_deadlines → calculator</text><text x="710" y="175">submit_answer</text>
-          <text x="180" y="172" font-weight="600">Pinned corpus</text>
-          <text x="180" y="196" font-size="12" fill="var(--muted)">eCFR 2026-10-02, SHA-256 per part</text>
-          <text x="180" y="216" font-size="12" fill="var(--muted)">2,371 paragraphs → 2,495 chunks</text>
-          <text x="180" y="236" font-size="12" fill="var(--muted)">citation graph: 2,276 edges (Neo4j)</text>
-          <text x="180" y="256" font-size="12" fill="var(--muted)">384-d bge embeddings (Qdrant / numpy)</text>
-          <text x="180" y="276" font-size="12" fill="var(--muted)">43-question golden set, checked vs law</text>
-          <text x="910" y="172" font-weight="600">Controls</text>
-          <text x="910" y="196" font-size="12" fill="var(--muted)">OpenTelemetry gen_ai.*</text>
-          <text x="910" y="216" font-size="12" fill="var(--muted)">token + USD caps</text>
-          <text x="910" y="236" font-size="12" fill="var(--muted)">rate limit (Redis)</text>
-          <text x="910" y="256" font-size="12" fill="var(--muted)">versioned prompts</text>
-          <text x="910" y="276" font-size="12" fill="var(--muted)">CI eval on every push</text>
+          <text x="85" y="44" font-weight="700">guard</text><text x="85" y="63" font-size="11.5" fill="var(--muted)">mask SSN, card, acct</text>
+          <text x="300" y="44" font-weight="700">agent · LangGraph</text><text x="300" y="63" font-size="11.5" fill="var(--muted)">Claude / Azure OpenAI / OpenAI</text>
+          <text x="520" y="44" font-weight="700">verify</text><text x="520" y="63" font-size="11.5" fill="var(--muted)">quotes · dates · amounts</text>
+          <text x="720" y="44" font-weight="700">finalize</text><text x="720" y="63" font-size="11.5" fill="var(--muted)">drop · withhold</text>
+          <text x="915" y="44" font-weight="700">handoff</text><text x="915" y="63" font-size="11.5" fill="var(--muted)">ticket for disputes</text>
+          <text x="425" y="97" font-size="11.5" fill="var(--muted)">retry with verifier feedback</text>
+          <text x="270" y="175">search_regulations → bge · Qdrant</text><text x="270" y="225">related_paragraphs → Neo4j graph</text>
+          <text x="270" y="275">compute_deadlines → Reg E / Z code</text>
+          <text x="570" y="174" font-weight="700">Pinned corpus</text>
+          <text x="570" y="198" font-size="12" fill="var(--muted)">eCFR 2026-10-02, SHA-256 per part</text>
+          <text x="570" y="218" font-size="12" fill="var(--muted)">2,371 paragraphs → 2,495 chunks</text>
+          <text x="570" y="238" font-size="12" fill="var(--muted)">2,276 citation-graph edges</text>
+          <text x="570" y="258" font-size="12" fill="var(--muted)">43 golden questions, checked vs law</text>
+          <text x="860" y="174" font-weight="700">Operations</text>
+          <text x="860" y="198" font-size="12" fill="var(--muted)">OpenTelemetry gen_ai.* spans</text>
+          <text x="860" y="218" font-size="12" fill="var(--muted)">USD ledger · Redis rate limits</text>
+          <text x="860" y="238" font-size="12" fill="var(--muted)">Kubernetes · NetworkPolicy</text>
+          <text x="860" y="258" font-size="12" fill="var(--muted)">CI eval · weekly law-change check</text>
         </g>
       </svg>
-    </section>
-    <section class="card">
+    </div>
+    <div class="card">
       <h2>Controls</h2>
       <div class="tablewrap"><table>
         <tr><th>Risk</th><th>Control</th><th>Where</th></tr>
-        <tr><td>Invented rule, deadline or amount</td><td>Claim kept only if its quote is a verbatim substring of a passage a tool returned in this session; one retry with feedback</td><td class="mono">verify.py, graph.py, copilot.py</td></tr>
-        <tr><td>Model date arithmetic</td><td>Dates come from the calculator; any other date in a reply withholds it</td><td class="mono">timeline.py, copilot.py</td></tr>
-        <tr><td>Live member problem</td><td>Disputes and unauthorized use always produce a handoff ticket; unsupported replies are withheld for a person</td><td class="mono">copilot.py</td></tr>
-        <tr><td>PII in member text</td><td>SSN, card, account, email, phone masked before retrieval, model and traces</td><td class="mono">guard.py</td></tr>
-        <tr><td>Cost and abuse</td><td>Worst-case admission against a USD ledger; per-IP rate limit and daily cap in Redis; fails closed</td><td class="mono">guard.py, limits.py</td></tr>
-        <tr><td>Regression</td><td>Corpus, golden and prompt versions in every report; CI runs tests, offline eval, store parity and a Kubernetes smoke test</td><td class="mono">eval/, .github/</td></tr>
+        <tr><td>Invented rule, deadline or amount</td><td>Quote must be a verbatim substring of a passage a tool returned this session; one retry with feedback</td><td class="mono">verify.py · copilot.py</td></tr>
+        <tr><td>Model date or money arithmetic</td><td>Dates and dollar limits come from the calculator; any other date or amount in a reply withholds it</td><td class="mono">timeline.py · copilot.py</td></tr>
+        <tr><td>Live member problem</td><td>Disputes and unauthorized use always open a handoff ticket; unsupported replies go to a specialist</td><td class="mono">copilot.py</td></tr>
+        <tr><td>PII in member text</td><td>SSN, card, account, email, phone masked before retrieval, model and traces; logs carry paths only</td><td class="mono">guard.py · server</td></tr>
+        <tr><td>Cost and abuse</td><td>Worst-case admission against a USD ledger; per-IP rate limit and daily cap in Redis; fails closed</td><td class="mono">guard.py · limits.py</td></tr>
+        <tr><td>Web attack surface</td><td>Strict CSP (no inline script), no framing, request ids, JSON errors without tracebacks</td><td class="mono">server/app.py</td></tr>
+        <tr><td>The law changes</td><td>Weekly job compares eCFR amendment dates with the pinned snapshot and fails if a covered section changed</td><td class="mono">corpus/freshness.py</td></tr>
+        <tr><td>Regression</td><td>Hashes and commit in every report; CI runs tests against real Qdrant and Neo4j, the offline eval and a Kubernetes deploy</td><td class="mono">eval/ · .github/</td></tr>
       </table></div>
-    </section>
+    </div>
   </div>
-</div>
+</section>
 
-<footer>Explains regulations; does not decide a member's case. Corpus: eCFR point-in-time text. Source: <a href="https://github.com/Akhilesh-Vangala/reglens">github.com/Akhilesh-Vangala/reglens</a></footer>
+<footer>Explains regulations; does not decide a member's case. Corpus: eCFR point-in-time text.
+  <a href="https://github.com/Akhilesh-Vangala/reglens">Source on GitHub</a> · <a href="/api/docs">API reference</a></footer>
 </main>
-
-<script>
-const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let META = null;
-
-async function j(url, opts) {
-  const r = await fetch(url, opts);
-  const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || r.statusText);
-  return body;
-}
-const post = (url, body) => j(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
-const chip = (k, v) => `<span class="chip">${esc(k)} <b>${esc(v)}</b></span>`;
-const hl = (src, span) => span ? esc(src.slice(0, span[0])) + "<mark>" + esc(src.slice(span[0], span[1])) + "</mark>" + esc(src.slice(span[1])) : esc(src);
-const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric", year: "numeric"}) : "";
-const money = a => a == null ? "" : "$" + Number(a).toFixed(2).replace(/\.00$/, "");
-
-// tabs (remember last tab)
-function show(tab) {
-  $$("#tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
-  $$("[data-panel]").forEach(p => p.classList.toggle("hidden", p.dataset.panel !== tab));
-  try { localStorage.setItem("reglens.tab", tab); } catch (e) {}
-  if (location.hash.slice(1) !== tab) history.replaceState(null, "", "#" + tab);
-  if (tab === "results") loadResults();
-}
-$("#tabs").onclick = e => { const b = e.target.closest("button"); if (b) show(b.dataset.tab); };
-
-async function loadMeta() {
-  META = await j("/api/meta");
-  const a = META.answering;
-  $("#status").innerHTML = `<span class="dot ${a.enabled ? "on" : "off"}"></span><span>${a.enabled ? `Answering live · ${esc(META.model.provider)}:${esc(META.model.chat)}` : "Answering off · deterministic tools live"}</span>`;
-  $("#status").title = a.enabled ? `Limits: ${a.rate_per_hour}/hour per visitor, $${a.daily_usd_cap}/day` : a.reason;
-  $("#prov").innerHTML = chip("eCFR as of", META.as_of) + chip("paragraphs", META.stats.passages.toLocaleString()) +
-    chip("chunks", META.stats.chunks.toLocaleString()) + chip("graph edges", META.graph.edges.toLocaleString()) +
-    Object.entries(META.parts).map(([p, m]) => chip(`Part ${p}`, m.sha256)).join("");
-  const off = a.enabled ? "" : "Live answering is not enabled on this deployment yet. The deadline calculator, checker, search and citation graph are fully live.";
-  $("#copilotNote").title = $("#askNote").title = a.reason || "";
-  $("#runCopilot").disabled = $("#askBtn").disabled = !a.enabled;
-  $("#copilotNote").textContent = $("#askNote").textContent = off;
-  $("#cases").innerHTML = META.cases.map(c => `<button data-case="${esc(c.case)}">${esc(c.id)}</button>`).join("");
-  $("#cases").onclick = e => { const b = e.target.closest("button"); if (b) $("#case").value = b.dataset.case; };
-  $("#examples").innerHTML = META.examples.map(e => `<button data-q="${esc(e.question)}">${esc(e.id)} · ${esc(e.question.slice(0, 60))}…</button>`).join("");
-  $("#examples").onclick = e => { const b = e.target.closest("button"); if (b) $("#askq").value = b.dataset.q; };
-}
-
-// ---------- copilot ----------
-function timelineTable(t) {
-  const rows = t.items.map(i => `<tr><td>${esc(i.label)}${i.note ? `<div class="muted">${esc(i.note)}</div>` : ""}</td>
-    <td class="num">${i.amount != null ? `<b style="font-size:16px">${money(i.amount)}</b>` : ""}${i.due && i.amount != null ? "<br>" : ""}${i.due ? `<span class="${i.amount != null ? "muted" : ""}">${i.amount != null ? "notice by " : ""}${esc(fmtDate(i.due))}</span>` : ""}</td>
-    <td><details><summary class="mono">${esc(i.citation)}</summary><div class="src">${esc(i.quote)}</div></details></td></tr>`).join("");
-  return `${t.warnings.map(w => `<div class="banner">${esc(w)}</div>`).join("")}
-    <div class="tablewrap"><table><tr><th>What</th><th class="num">When / max</th><th>Rule (verbatim)</th></tr>${rows}</table></div>
-    <p class="muted" style="margin:8px 0 0">${esc(t.assumption)}</p>`;
-}
-
-function renderTrace(steps, result, usage) {
-  const li = steps.map(s => {
-    if (s.node === "agent") return `<li class="${s.error ? "err" : ""}"><b>model</b> ${s.error ? esc(s.error) : (s.tool_calls.length ? "→ " + s.tool_calls.map(esc).join(", ") : "→ no tool call")} <span class="muted">${s.ms ?? ""} ms</span></li>`;
-    const res = Array.isArray(s.result) ? s.result.slice(0, 4).join(" · ") : s.result;
-    return `<li class="tool ${String(res).startsWith("error") ? "err" : ""}"><span class="mono">${esc(s.tool)}</span>(${esc(JSON.stringify(s.args)).slice(0, 140)}) <span class="muted">${s.ms} ms</span><div class="muted">${esc(res)}</div></li>`;
-  });
-  const checks = (result.checks || []).map(c => `<li class="${c.verified ? "tool" : "err"}"><b>verify</b> <span class="mono">${esc(c.citation || c.chunk_id)}</span> → ${esc(c.reason)}</li>`);
-  const ev = (result.events || []).map(e => `<li class="err"><b>finalize</b> ${esc(e)}</li>`);
-  $("#trace").innerHTML = `<ul class="trace">${li.join("")}${checks.join("")}${ev.join("")}</ul>
-    <div class="chips" style="margin-top:10px;padding:0">${chip("model calls", usage.calls)}${chip("input tok", usage.input_tokens)}${chip("output tok", usage.output_tokens)}${chip("cost", "$" + (usage.usd ?? 0).toFixed(5))}</div>`;
-}
-
-async function runCopilot() {
-  const c = $("#case").value.trim(); if (!c) return;
-  const out = $("#copilotOut"); out.classList.remove("hidden");
-  out.innerHTML = `<span class="spinner"></span> <span class="muted">Searching, reading, computing, verifying…</span>`;
-  $("#runCopilot").disabled = true;
-  try {
-    const r = await post("/api/copilot", {case: c});
-    const x = r.result;
-    let h = `<h2>Result</h2><span class="badge b-acc">${esc(x.case_type.replaceAll("_", " "))}</span> `;
-    h += x.draft_withheld ? `<span class="badge b-bad">reply withheld</span>` : `<span class="badge b-ok">${x.claims.length} verified citation${x.claims.length === 1 ? "" : "s"}</span>`;
-    if (Object.keys(r.redactions).length) h += `<div class="banner info">Masked before the model saw it: ${Object.entries(r.redactions).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(", ")}</div>`;
-    if (x.draft_withheld) h += `<div class="banner bad"><b>Withheld for a specialist.</b> ${esc(x.review_reason)}</div>`;
-    else if (x.needs_human_review) h += `<div class="banner"><b>Representative action required.</b> ${esc(x.review_reason)}</div>`;
-    if (x.reply_to_member) h += `<h3>Draft reply to member</h3><div class="reply">${esc(x.reply_to_member)}</div><button class="btn" id="copyReply">Copy</button>`;
-    if (x.claims.length) h += `<h3>Verified citations</h3>` + x.claims.map(cl => `<div class="claim"><div>${esc(cl.statement)}</div><div class="cit">${esc(cl.citation)}</div><blockquote>“${esc(cl.quote)}”</blockquote><details><summary>Source passage</summary><div class="src">${hl(cl.source, cl.span)}</div></details></div>`).join("");
-    if (x.handoff) h += `<h3>Handoff ticket</h3><div class="ticket"><span class="badge ${x.handoff.priority === "urgent" ? "b-bad" : "b-acc"}">${esc(x.handoff.priority)}</span> <span class="k">queue</span> <b>${esc(x.handoff.queue)}</b><p>${esc(x.handoff.summary)}</p><ul>${x.handoff.next_actions.map(a => `<li>${esc(a)}</li>`).join("")}</ul></div>`;
-    out.innerHTML = h;
-    const cp = $("#copyReply"); if (cp) cp.onclick = () => navigator.clipboard?.writeText(x.reply_to_member);
-    renderTrace(r.steps, x, r.usage);
-    $("#timelineCard").classList.toggle("hidden", !x.timelines.length);
-    $("#copilotTimeline").innerHTML = x.timelines.map(timelineTable).join("<hr>");
-  } catch (e) { out.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-  finally { $("#runCopilot").disabled = !META.answering.enabled; }
-}
-$("#runCopilot").onclick = runCopilot;
-
-// ---------- deadline calculator ----------
-function addTransfer(d = "", a = "") {
-  const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "6px";
-  row.innerHTML = `<input type="date" value="${d}"> <input type="number" min="0" step="0.01" placeholder="amount" value="${a}" style="width:130px"> <button class="btn">Remove</button>`;
-  row.querySelector("button").onclick = () => row.remove();
-  $("#dl_transfers").appendChild(row);
-}
-$("#dl_add").onclick = () => addTransfer();
-addTransfer("2026-10-20", "400");
-async function runDeadlines() {
-  const body = {case_type: $("#dl_type").value, notified: $("#dl_notified").value,
-    learned_of_loss: $("#dl_learned").value || null, statement_sent: $("#dl_statement").value || null,
-    transfers: [...$("#dl_transfers").children].map(r => { const [d, a] = r.querySelectorAll("input"); return {date: d.value, amount: Number(a.value)}; }).filter(t => t.date && t.amount),
-    new_account: $("#dl_new").checked, pos_or_foreign: $("#dl_pos").checked, unauthorized_use: $("#dl_unauth").checked};
-  try { $("#dl_out").innerHTML = timelineTable(await post("/api/timeline", body)); }
-  catch (e) { $("#dl_out").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-}
-$("#dl_run").onclick = runDeadlines;
-runDeadlines();
-
-// ---------- checker ----------
-const CK_PASSAGES = ["12 CFR 1005.11(c)(1)", "12 CFR 1005.6(b)(1)", "12 CFR 1026.13(c)(2)"];
-let CK = {};
-const slug = c => c.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");  // chunk ids are citation slugs
-async function loadChecker() {
-  const sel = $("#ck_passage"); sel.innerHTML = "";
-  for (const cit of CK_PASSAGES) {
-    const full = await j(`/api/chunk/${slug(cit)}`);
-    CK[full.id] = (full.context ? full.context + " " : "") + full.text;
-    sel.insertAdjacentHTML("beforeend", `<option value="${esc(full.id)}">${esc(full.citation)}</option>`);
-  }
-  sel.onchange = () => { $("#ck_source").textContent = CK[sel.value]; presets(); };
-  sel.onchange();
-  $("#ck_presets button[data-i='1']")?.click();  // start on the instructive case: a changed number is rejected
-}
-function presets() {
-  const src = CK[$("#ck_passage").value] || "";
-  // the most instructive sentence: one that states a number (a deadline or dollar limit)
-  const sentences = src.split(/(?<=\.)\s+/).map(x => x.trim()).filter(x => x.length > 40);
-  const exact = sentences.find(x => /\b\d{2,}\b|\$\d/.test(x)) || sentences[0] || src.slice(0, 120);
-  const list = [
-    ["Exact quote", exact, true],
-    ["Change a number", exact.replace(/\d+/, n => String(Number(n) * 3)) , true],
-    ["Paraphrase", "The credit union has to look into errors quickly and fix them fast.", true],
-    ["Real quote, passage not retrieved", exact, false],
-    ["Too short", exact.split(" ").slice(0, 3).join(" "), true],
-  ];
-  $("#ck_presets").innerHTML = list.map(([n, q, r], i) => `<button data-i="${i}">${esc(n)}</button>`).join("");
-  $("#ck_presets").onclick = e => { const b = e.target.closest("button"); if (!b) return; const [, q, r] = list[b.dataset.i]; $("#ck_quote").value = q; $("#ck_retrieved").checked = r; runCheck(); };
-}
-async function runCheck() {
-  try {
-    const r = await post("/api/verify", {chunk_id: $("#ck_passage").value, quote: $("#ck_quote").value, retrieved: $("#ck_retrieved").checked});
-    const why = {ok: "Verbatim match in a retrieved passage: this claim would be shown.", quote_not_in_source: "The quote is not in the passage. The claim is removed before the member sees it.",
-      not_retrieved: "The text exists, but this passage was not retrieved for the question, so the model could not have read it. Removed.", quote_too_short: "Too short to carry meaning (under 25 characters). Removed.", unknown_chunk: "No such passage. Removed."}[r.reason];
-    $("#ck_out").innerHTML = `<div class="verdict ${r.verified ? "b-ok" : "b-bad"}" style="border:0">${r.verified ? "✓ Accepted" : "✗ Rejected"}</div>
-      <div class="mono">${esc(r.reason)}</div><p>${esc(why)}</p>${r.verified ? `<div class="src">${hl(r.source, r.span)}</div>` : ""}`;
-  } catch (e) { $("#ck_out").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-}
-$("#ck_run").onclick = runCheck;
-
-// ---------- explore ----------
-async function doSearch() {
-  const q = $("#q").value.trim(); if (!q) return;
-  $("#hits").innerHTML = `<span class="spinner"></span>`;
-  try {
-    const r = await j(`/api/search?q=${encodeURIComponent(q)}&retriever_name=${$("#ret").value}`);
-    $("#hits").innerHTML = (Object.keys(r.redactions).length ? `<div class="banner info">Masked: ${Object.keys(r.redactions).join(", ")}</div>` : "") +
-      `<div class="muted">${r.hits.length} results · ${r.latency_ms} ms · ${esc(r.retriever)}</div>` +
-      r.hits.map(h => `<div class="hit" data-id="${esc(h.id)}"><div class="cit">${h.rank}. ${esc(h.citation)}</div><div class="meta">${esc(h.heading)} · ${esc(h.kind)} · ${h.score}</div><div>${esc(h.text)}${h.text.length >= 400 ? "…" : ""}</div></div>`).join("");
-  } catch (e) { $("#hits").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-}
-$("#searchBtn").onclick = doSearch;
-$("#q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
-$("#hits").onclick = async e => {
-  const h = e.target.closest(".hit"); if (!h) return;
-  $$(".hit").forEach(x => x.classList.toggle("sel", x === h));
-  const g = await j(`/api/graph/${h.dataset.id}`);
-  const groups = {};
-  g.neighbors.forEach(n => { const k = n.relation === "INTERPRETS" ? (n.direction === "in" ? "Official Interpretations of this paragraph" : "Rule this comment interprets") : (n.direction === "out" ? "Paragraphs it cites" : "Cited by"); (groups[k] = groups[k] || []).push(n); });
-  $("#graphOut").innerHTML = `<div class="mono" style="margin-bottom:8px">${esc(g.citation)}</div>` + (g.neighbors.length ? Object.entries(groups).map(([k, ns]) =>
-    `<h3>${esc(k)} <span class="muted">(${ns.length})</span></h3>` + ns.map(n => `<div class="hit" data-id="${esc(n.id)}"><div class="cit">${esc(n.citation)}</div><div class="muted">${esc(n.text)}…</div></div>`).join("")).join("") : `<p class="muted">No graph neighbors.</p>`);
-};
-$("#graphOut").onclick = e => { const h = e.target.closest(".hit"); if (h) $("#hits").onclick({target: h}); };
-
-// ---------- ask ----------
-async function doAsk() {
-  const q = $("#askq").value.trim(); if (!q) return;
-  const out = $("#askOut"); out.classList.remove("hidden"); out.innerHTML = `<span class="spinner"></span>`;
-  try {
-    const r = await post("/api/ask", {question: q});
-    const f = r.final;
-    out.innerHTML = `<h2>Answer</h2><span class="badge ${f.status === "answered" ? "b-ok" : f.status === "refused" ? "b-bad" : "b-warn"}">${esc(f.status.replaceAll("_", " "))}</span>
-      ${f.needs_human_review ? `<div class="banner"><b>Routed to a specialist.</b> ${esc(f.review_reason)}</div>` : ""}
-      <div class="reply">${esc(f.answer)}</div>` + f.claims.map(c => `<div class="claim"><div>${esc(c.statement)}</div><div class="cit">${esc(c.citation)}</div><blockquote>“${esc(c.quote)}”</blockquote><details><summary>Source passage</summary><div class="src">${hl(c.source, c.span)}</div></details></div>`).join("");
-    const u = r.usage;
-    $("#askTrace").innerHTML = `<table><tr><th>Stage</th><th class="num">ms</th></tr>${r.stages.map(s => `<tr><td>${esc(s.node)}</td><td class="num">${s.ms}</td></tr>`).join("")}</table>
-      <div class="chips" style="margin-top:10px;padding:0">${chip("calls", u.calls)}${chip("in", u.input_tokens)}${chip("out", u.output_tokens)}${chip("cost", u.usd == null ? "–" : "$" + u.usd.toFixed(5))}</div>
-      <h3>Verifier</h3><table>${r.checks.map(c => `<tr><td class="mono">${esc(c.citation || c.chunk_id)}</td><td class="${c.verified ? "b-ok" : "b-bad"}">${esc(c.reason)}</td></tr>`).join("") || "<tr><td class='muted'>no claims</td></tr>"}</table>
-      ${r.events.length ? `<h3>Events</h3><ul>${r.events.map(e => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}`;
-  } catch (e) { out.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
-}
-$("#askBtn").onclick = doAsk;
-
-// ---------- results ----------
-let resultsLoaded = false;
-async function loadResults() {
-  if (resultsLoaded) return; resultsLoaded = true;
-  const e = await j("/api/evals");
-  const all = e.retrieval_all || {};
-  const names = Object.keys(all).sort((a, b) => all[b]["recall@5"].mean - all[a]["recall@5"].mean);
-  const best = names[0];
-  $("#bars").innerHTML = names.map(n => { const m = all[n]["recall@5"];
-    return `<div class="bar ${n === best ? "best" : ""}"><span class="lbl" title="${esc(n)}">${esc(n)}</span><div class="track"><div class="fill" style="width:${100 * m.mean}%"></div><div class="ci" style="left:${100 * m.lo}%;width:${100 * (m.hi - m.lo)}%"></div></div><span class="mono">${m.mean.toFixed(2)}</span></div>`; }).join("");
-  $("#barsNote").innerHTML = `Dense retrieval beats BM25 by +0.52 and naive RRF hybrid by +0.30 (paired, CIs exclude 0). Neither a general-domain cross-encoder nor graph expansion improves first-stage recall; the graph is used by the agent instead.`;
-  if (e.answers) {
-    const cfg = e.answers.configs;
-    const ci = m => m && m.n ? `${m.mean.toFixed(2)} <span class="muted">(${m.ci95[0].toFixed(2)}–${m.ci95[1].toFixed(2)})</span>` : "–";
-    const pct = v => v == null ? "–" : (100 * v).toFixed(1) + "%";
-    $("#answers").innerHTML = `<table><tr><th>Config</th><th class="num">Answer accuracy</th><th class="num">Unsupported / fabricated shown</th></tr>${Object.entries(cfg).map(([n, s]) => `<tr><td>${esc(n)}</td><td class="num">${ci(s.answer_accuracy)}</td><td class="num">${pct(s.unsupported_claim_rate_shown ?? s.fabricated_citation_rate)}</td></tr>`).join("")}</table><p class="muted">${esc(e.answers.run)} · ${esc(e.answers.provenance?.chat_deployment || "")}</p>`;
-  } else {
-    $("#answers").innerHTML = `Closed-book vs RAG vs RAG + verifier on 43 questions (33 answerable, 4 out of corpus, 6 refusal incl. 5 adversarial). <b>Not yet run</b>: no numbers are shown until the model run exists.`;
-  }
-  if (e.stores) {
-    const q = e.stores.qdrant, n = e.stores.neo4j;
-    $("#stores").innerHTML = `<div class="stat"><div><b>${esc(q.exact_top_k_identical)}</b><span>Qdrant exact top-8 identical to numpy</span></div><div><b>${Number(q.hnsw_recall_at_k_vs_exact).toFixed(2)}</b><span>HNSW recall@8 vs exact</span></div>
-      <div><b>${n.neighbor_mismatches} / ${n.nodes_checked.toLocaleString()}</b><span>Neo4j neighbor mismatches</span></div><div><b>${n.edges.toLocaleString()}</b><span>graph edges (${n.graph_stats.by_type.INTERPRETS} interprets, ${n.graph_stats.by_type.CITES} cites)</span></div></div>
-      <p class="muted">${esc(e.stores.run)} · commit ${esc(e.stores.provenance.git_commit)}</p>`;
-  }
-}
-
-// keyboard: Cmd/Ctrl+Enter runs the visible panel's primary action
-document.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { const p = $("[data-panel]:not(.hidden) button.primary:not(:disabled)"); if (p) p.click(); } });
-
-loadMeta().catch(e => $("#prov").innerHTML = `<span class="err">${esc(e.message)}</span>`);
-loadChecker().catch(() => {});
-let start = location.hash.slice(1) || "copilot";
-if (!location.hash) { try { start = localStorage.getItem("reglens.tab") || start; } catch (e) {} }
-show($$("#tabs button").some(b => b.dataset.tab === start) ? start : "copilot");
-</script>
 </body>
 </html>

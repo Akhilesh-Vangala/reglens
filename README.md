@@ -77,10 +77,11 @@ The obvious defaults would have been wrong:
 
 ### Answers
 
-`reglens eval answers` compares three configurations on 43 questions:
+`reglens eval answers` compares four configurations on 43 questions, scored by one function:
 - **A**, closed book
 - **B**, RAG without the verifier
 - **C**, RAG with the verifier
+- **D**, the copilot agent
 
 The 43 questions split into 33 answerable, 4 out of corpus and 6 that should be refused. Five are adversarial: prompt injection, PII-laden, system-prompt extraction, role-played legal advice and a false premise.
 
@@ -92,7 +93,18 @@ Metrics:
 - tokens, latency and cost
 - paired deltas between configurations
 
-*This needs a model run and has not been run yet. No answer-quality numbers are claimed until it has.* Every gold fact is checked against the regulation text in CI (`tests/test_golden.py`), so if the law changes, the labels fail before any model call does.
+`reglens eval copilot` runs 10 realistic member cases ([evals/copilot_cases.jsonl](evals/copilot_cases.jsonl)). The cases include relative dates ("yesterday"), a missed 60-day statement window, a new-account extension, a legal-advice request and a prompt injection embedded in a real case. Each case is scored on:
+- case-type accuracy
+- whether the agent called the calculator
+- whether the calculator's output matches the expected liability and deadlines, i.e. whether the agent read the dates correctly
+- handoff correctness
+- whether the reply was released
+
+Expected values are derived by running the calculator on reference arguments, and `tests/test_copilot_cases.py` keeps them in sync with the code.
+
+Model runs refuse to start without a USD cap. `--dry-run` prints the worst-case cost: $0.26 for the copilot cases, and $7.53 for the full answer evaluation at 3 repeats, both on Claude Haiku 5.5.
+
+*Neither evaluation has been run yet. No answer-quality numbers are claimed until a run exists.* Every gold fact is checked against the regulation text in CI (`tests/test_golden.py`), so if the law changes, the labels fail before any model call does.
 
 ## Deterministic components
 
@@ -119,13 +131,15 @@ A heading-only paragraph resolves to its first child. 87 references point outsid
 | Risk | Control | Where |
 |---|---|---|
 | Invented rule, deadline or amount | Verbatim-quote check against passages a tool returned; one retry with feedback; unverified claims dropped | `verify.py`, `graph.py`, `copilot.py` |
-| Model date arithmetic | Dates come only from the calculator; any other date in a reply withholds it | `timeline.py`, `copilot.py` |
+| Model date or money arithmetic | Dates and dollar amounts in a reply must come from the calculator, a verified quote or the member's own message, otherwise the reply is withheld | `timeline.py`, `copilot.py` |
 | Live member problem | Disputes and unauthorized use always produce a handoff ticket; unsupported replies withheld for a person | `copilot.py` |
 | PII in member text | SSN, card, account, email, phone masked before retrieval, model and traces | `guard.py` |
-| Cost | Every call admitted against its worst case before it is sent; hard USD cap across runs | `guard.py`, `generator.py` |
+| Cost | Every call admitted against its worst case before it is sent; hard USD cap across runs; public reservations settle to measured spend, even when a run fails | `guard.py`, `generator.py`, `server/` |
 | Abuse on a public URL | Per-IP hourly limit and global daily USD cap in Redis; fails closed without a durable store | `server/limits.py` |
 | Prompt injection | Member text and tool output treated as data; verifier checks text, not intent; adversarial golden items | `prompts.py`, `copilot.py` |
-| Regression | Hashes and commit in every report; CI runs lint, tests against real Qdrant and Neo4j, the offline eval, and a Kubernetes deploy with a smoke test | `eval/`, `.github/workflows/ci.yml` |
+| The law changes | Weekly job compares eCFR amendment history with the pinned snapshot and fails on any in-scope amendment | `corpus/freshness.py`, `law-watch.yml` |
+| Web surface | Strict CSP (no inline script), no framing, request ids, JSON errors without tracebacks, access logs with paths only (never member text), retriever allowlist | `server/app.py` |
+| Regression | Hashes and commit in every report; CI runs lint and format checks, tests against real Qdrant and Neo4j, the offline eval, and a Kubernetes deploy with a smoke test | `eval/`, `.github/workflows/ci.yml` |
 | Observability | OpenTelemetry spans per step with `gen_ai.*` token attributes; JSONL locally, OTLP to any backend | `telemetry.py` |
 
 ## Run it
@@ -135,7 +149,8 @@ python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev,serve]"
 pytest -q                     # unit, golden, calculator, copilot, server; store tests need QDRANT_URL / NEO4J_URI
 reglens eval retrieval        # downloads bge-small on first run
-reglens-serve                 # http://127.0.0.1:8000
+reglens-serve                 # http://127.0.0.1:8000  (API reference at /api/docs)
+reglens check-law             # has any in-scope regulation been amended since the snapshot?
 ```
 
 **Full stack (app + Qdrant + Neo4j + loader):** `docker compose up --build`
@@ -161,13 +176,17 @@ Model runs refuse to start without `REGLENS_USD_CAP` and `PRICE_*`. `reglens eva
 
 ```bash
 reglens ask "My debit card was stolen and I called this morning. What is the most I could lose?"
-reglens eval answers --repeats 3
+reglens eval copilot --dry-run && reglens eval copilot
+reglens eval answers --dry-run --repeats 3 && reglens eval answers --repeats 3
 ```
+
+The copilot is also served as server-sent events (`POST /api/copilot/stream`): one event per agent turn and tool call, then the verified result. The demo's pipeline view lights up from these events.
 
 ## Layout
 
 ```
-src/reglens/corpus/      eCFR fetch (hashed), paragraph parser (6-level CFR labels, interpretations), chunker
+src/reglens/corpus/      eCFR fetch (hashed), paragraph parser (6-level CFR labels, interpretations), chunker,
+                         law-change monitor
 src/reglens/retrieval/   BM25, dense, RRF hybrid, bge + cross-encoder, graph expansion, Qdrant, Azure AI Search
 src/reglens/kg/          citation graph; Neo4j store and GraphService
 src/reglens/timeline.py  Reg E / Reg Z deadline and liability calculator
@@ -176,9 +195,10 @@ src/reglens/graph.py     LangGraph Q&A pipeline: guard → retrieve → generate
 src/reglens/verify.py    verbatim quote verifier
 src/reglens/guard.py     PII masking, spend ledger
 src/reglens/eval/        golden-set runner, bootstrap CIs, paired deltas, store parity, reports
-src/reglens/server/      FastAPI service, rate/spend limits, single-page demo
+src/reglens/server/      FastAPI service (SSE copilot stream, security headers, limits), demo UI (static/)
 deploy/k8s/              kustomize manifests + smoke test
-evals/golden.jsonl       43 labelled questions;  evals/reports/  every run, with provenance
+evals/golden.jsonl       43 labelled questions;  evals/copilot_cases.jsonl  10 member cases
+evals/reports/           every run, with provenance
 docs/MODEL_CARD.md       intended use, limits, evaluation, governance hooks
 ```
 

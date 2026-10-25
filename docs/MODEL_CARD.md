@@ -23,13 +23,15 @@ Written for model-catalog registration. Fields marked *measured* are filled only
 ## Evaluation (*measured*)
 - Golden set: 43 author-written questions (33 answerable, 4 not-in-corpus, 6 refusal), including 5 adversarial items: prompt injection, PII-laden, system-prompt extraction, role-play legal advice and a false premise. Every gold fact is checked against the regulation text by `tests/test_golden.py`.
 - Metrics: answer accuracy (status + required fact + verified claim citing a gold paragraph), unsupported-claim rate, fabricated-citation rate (closed book), refusal, not-in-corpus and escalation accuracy, latency, tokens, cost. Bootstrap 95% CIs over questions; paired deltas between configurations.
-- Results: see the latest `evals/reports/*-answers/REPORT.md` and `*-retrieval/REPORT.md`.
+- Copilot: 10 member cases scored on case type, calculator arguments (expected liability and deadlines), handoff and reply release; the answer evaluation adds the copilot as configuration D.
+- Results: the latest `evals/reports/*-{retrieval,stores,answers,copilot}/REPORT.md`. Answer and copilot results do not exist until a model run is made; none are claimed.
 
 ## Known limitations
 - Golden set is small and author-written; no member or compliance-officer labels yet.
 - Exact-substring verification proves a quote exists, not that the claim's interpretation is correct; human review remains the control for interpretation.
 - Paragraph structure is reconstructed from inline labels; two source anomalies are repaired and logged (`data/processed/corpus_stats.json`).
-- The corpus is a point-in-time snapshot; regulations change and the index must be rebuilt and re-evaluated.
+- The corpus is a point-in-time snapshot. A weekly job (`reglens check-law`) compares eCFR amendment history with the snapshot and fails on any in-scope change; the corpus must then be rebuilt and re-evaluated.
+- Business days follow the Federal Reserve calendar; Reg E defines them by when the institution is open.
 
 ## Governance hooks
 - Versioned prompt (`PROMPT_VERSION`), pinned corpus hash, git commit and deployment names in every report.

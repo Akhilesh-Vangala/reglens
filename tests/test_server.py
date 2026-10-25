@@ -153,3 +153,65 @@ def test_copilot_endpoint_end_to_end_with_scripted_model(monkeypatch):
     r = client.post("/api/copilot", json={"case": "card stolen 2026-10-20, called 2026-10-21, $400 charge"}).json()
     assert r["result"]["claims"][0]["citation"] == "12 CFR 1005.6(b)(1)" and r["result"]["claims"][0]["span"]
     assert r["usage"]["calls"] == 3 and r["usage"]["usd"] > 0
+
+
+def test_security_headers_request_id_and_no_inline_script():
+    r = client.get("/")
+    csp = r.headers["content-security-policy"]
+    assert "script-src 'self'" in csp and "'unsafe-inline'" not in csp.split("script-src")[1].split(";")[0]
+    assert r.headers["x-frame-options"] == "DENY" and len(r.headers["x-request-id"]) >= 8
+    assert "<script>" not in r.text and 'src="/static/app.js"' in r.text
+    assert client.get("/static/app.js").status_code == 200
+
+
+def test_search_rejects_unknown_or_heavy_retrievers_and_bad_queries():
+    assert client.get("/api/search", params={"q": "x", "retriever_name": "dense_bge+rerank"}).status_code == 400
+    assert client.get("/api/search", params={"q": "x" * 501, "retriever_name": "bm25"}).status_code == 400
+
+
+def test_verify_reports_where_the_quote_diverges():
+    good = "shall determine whether an error occurred within 10 business days of receiving a notice of error"
+    r = client.post("/api/verify", json={"chunk_id": "12_CFR_1005_11_c_1", "quote": good.replace("10", "30")}).json()
+    assert r["normalized_quote"][: r["matched_prefix"]].endswith("within ")
+
+
+def test_copilot_stream_emits_steps_then_result(monkeypatch):
+    import json as _json
+
+    import reglens.copilot as cp
+    from tests.test_copilot import DEADLINES, GOOD, Fixed, ScriptedChat, submit
+
+    _configured(monkeypatch, srv_limits.MemoryStore())
+    turns = [[("search_regulations", {"query": "stolen card"})], [DEADLINES], [submit("At most $50.", [GOOD])]]
+    monkeypatch.setattr(cp, "chat_model", lambda s: ScriptedChat(turns))
+    monkeypatch.setattr(srv, "retriever", lambda name: Fixed())
+    with client.stream("POST", "/api/copilot/stream", json={"case": "card stolen 2026-10-20, called 2026-10-21"}) as r:
+        assert r.headers["content-type"].startswith("text/event-stream")
+        events = [_json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
+    kinds = [e["type"] for e in events]
+    assert kinds[0] == "start" and kinds[-1] == "result" and kinds.count("step") == 6
+    assert events[-1]["result"]["claims"][0]["span"]
+
+
+def test_copilot_stream_admission_errors_are_http_status_codes(monkeypatch):
+    _configured(monkeypatch, srv_limits.MemoryStore(), per_hour=0)
+    assert client.post("/api/copilot/stream", json={"case": "my card was stolen yesterday"}).status_code == 429
+
+
+def test_failed_run_still_settles_the_reservation(monkeypatch):
+    import reglens.copilot as cp
+
+    store = srv_limits.MemoryStore()
+    _configured(monkeypatch, store)
+
+    class Boom:
+        def bind_tools(self, tools):
+            return self
+
+        def invoke(self, messages):
+            raise RuntimeError("provider down")
+
+    monkeypatch.setattr(cp, "chat_model", lambda s: Boom())
+    r = client.post("/api/copilot", json={"case": "my card was stolen yesterday"})
+    assert r.status_code == 502 and "copilot failed" in r.json()["detail"]
+    assert max(v for k, v in store.data.items() if k.startswith("usd:")) == 0  # reservation released

@@ -160,6 +160,7 @@ def budget_from_env(s: ModelSettings):
 def estimate_answers(configs: list[str], retriever_name: str = "dense_bge", repeats: int = 1, k: int = 8) -> dict:
     """Upper-bound cost of an answer run without calling a model: real prompt lengths, every RAG question
     assumed to need the verifier retry, every call assumed to use its full output allowance."""
+    from reglens.copilot import MAX_STEPS
     from reglens.generation.prompts import POLICY, RAG_TEMPLATE, format_passages
 
     s = ModelSettings.from_env()
@@ -175,6 +176,11 @@ def estimate_answers(configs: list[str], retriever_name: str = "dense_bge", repe
         )
         closed = CLOSED_BOOK_TEMPLATE.format(policy_closed=POLICY_CLOSED, question=g["question"])
         for cfg in configs:
+            if cfg == "D_copilot":  # worst case: every agent turn used, each with a full context and output
+                tok_in += repeats * MAX_STEPS * 12_000
+                tok_out += repeats * MAX_STEPS * max_out
+                calls += repeats * MAX_STEPS
+                continue
             n = 1 if cfg != "C_rag_verified" else 2
             p = closed if cfg == "A_closed_book" else rag
             tok_in += n * repeats * (len(p) // 3 + (600 if n == 2 else 0))
@@ -232,13 +238,39 @@ def eval_answers(configs: list[str], retriever_name: str = "dense_bge", repeats:
     return out
 
 
+def _copilot_as_pipeline_answer(state: dict) -> tuple[dict, dict]:
+    """Map a copilot run onto the pipeline's answer shape so configuration D is scored by the same function."""
+    r, sub = state["result"], state.get("submitted") or {}
+    status = "refused" if r["case_type"] == "out_of_scope" else "not_in_corpus" if r["draft_withheld"] else "answered"
+    final = {
+        "status": status,
+        "answer": r["reply_to_member"],
+        "claims": r["claims"],
+        "needs_human_review": r["needs_human_review"],
+    }
+    return final, {"claims": sub.get("claims", [])}
+
+
 def _answer_rows(configs, repeats, golden, gen, retriever, corpus, corpus_citations, k, s, rows, build_pipeline):
+    from reglens.guard import BudgetExceeded
+
     for cfg in configs:
-        app = (
-            None
-            if cfg == "A_closed_book"
-            else build_pipeline(retriever, gen, corpus, k=k, verify=(cfg == "C_rag_verified"))
-        )
+        if cfg == "D_copilot":
+            from reglens.copilot import build_copilot, chat_model
+            from reglens.kg import build_graph
+
+            app = build_copilot(
+                retriever,
+                build_graph(list(corpus.values())),
+                corpus,
+                chat_model(s),
+                ledger=gen.ledger,
+                prices=(s.price_input_per_m, s.price_output_per_m),
+            )
+        elif cfg == "A_closed_book":
+            app = None
+        else:
+            app = build_pipeline(retriever, gen, corpus, k=k, verify=(cfg == "C_rag_verified"))
         for rep in range(repeats):
             for g in golden:
                 t0 = time.perf_counter()
@@ -249,6 +281,14 @@ def _answer_rows(configs, repeats, golden, gen, retriever, corpus, corpus_citati
                     score = score_closed_book(g, final, corpus_citations)
                     usage = {"input_tokens": res.input_tokens, "output_tokens": res.output_tokens, "calls": 1}
                     events, err = [], res.error
+                elif cfg == "D_copilot":
+                    state = app.invoke({"case": g["question"]})
+                    if any(e.startswith("budget_exceeded") for e in state["result"]["events"]):
+                        raise BudgetExceeded("copilot stopped by the spend cap")
+                    final, draft = _copilot_as_pipeline_answer(state)
+                    retrieved = {i: corpus[i] for i in state["seen"] if i in corpus}
+                    score = score_rag(g, final, draft, retrieved, corpus)
+                    usage, events, err = state["usage"], state["result"]["events"], None
                 else:
                     state = app.invoke({"question": g["question"]})
                     final = state["final"]
@@ -452,5 +492,154 @@ def eval_stores(k: int = 8) -> Path:
         ]
     )
     out = _write("stores", [], summary, report)
+    print(report)
+    return out
+
+
+COPILOT_CASES = ROOT / "evals" / "copilot_cases.jsonl"
+
+
+def load_copilot_cases() -> list[dict]:
+    return [json.loads(x) for x in COPILOT_CASES.read_text().splitlines() if x.strip()]
+
+
+def score_copilot_case(case: dict, result: dict, submitted: dict | None) -> dict:
+    """Did the agent classify the case, extract the right dates into the calculator, hand off when it must, and
+    release a reply? Expected calculator outputs are derived from reference arguments (tests/test_copilot_cases)."""
+    computed = [i for t in result["timelines"] for i in t["items"]]
+    hits = [
+        any(
+            i["citation"] == e["citation"] and all(i.get(f) == v for f, v in e.items() if f != "citation")
+            for i in computed
+        )
+        for e in case["expect_items"]
+    ]
+    drafted = len((submitted or {}).get("claims", []))
+    unsupported_drafted = sum(not c["verified"] for c in result["checks"])
+    answerable = case["expected_case_type"] != "out_of_scope"
+    return {
+        "case_type_correct": result["case_type"] == case["expected_case_type"],
+        "calculator_called": bool(result["timelines"]) if case["expect_items"] else None,
+        "deadlines_correct": all(hits) if case["expect_items"] else None,
+        "deadline_items_matched": sum(hits),
+        "handoff_correct": bool(result["handoff"]) == case["expect_handoff"],
+        "reply_released": (not result["draft_withheld"]) if answerable else None,
+        "claims_shown": len(result["claims"]),
+        "claims_drafted": drafted,
+        "unsupported_drafted": unsupported_drafted,
+    }
+
+
+def estimate_copilot(repeats: int = 1) -> dict:
+    from reglens.copilot import MAX_STEPS
+
+    s = ModelSettings.from_env()
+    n = len(load_copilot_cases()) * repeats
+    tok_in, tok_out = n * MAX_STEPS * 12_000, n * MAX_STEPS * 4_000
+    usd = (tok_in * s.price_input_per_m + tok_out * s.price_output_per_m) / 1e6 if s.price_input_per_m else None
+    return {
+        "model": s.chat_deployment,
+        "cases": n,
+        "model_calls_max": n * MAX_STEPS,
+        "usd_upper_bound": round(usd, 2) if usd is not None else None,
+    }
+
+
+def eval_copilot(repeats: int = 1, retriever_name: str = "dense_bge") -> Path:
+    from datetime import date
+
+    from reglens.copilot import build_copilot, chat_model
+    from reglens.kg import build_graph
+
+    s = ModelSettings.from_env()
+    ledger = budget_from_env(s)
+    chunks = load_chunks(CHUNKS)
+    corpus, graph, retriever = {c.id: c for c in chunks}, build_graph(chunks), make_retriever(retriever_name, chunks)
+    llm, prices = chat_model(s), (s.price_input_per_m, s.price_output_per_m)
+    rows, stopped = [], None
+    for rep in range(repeats):
+        for case in load_copilot_cases():
+            app = build_copilot(
+                retriever, graph, corpus, llm, today=date.fromisoformat(case["today"]), ledger=ledger, prices=prices
+            )
+            t0 = time.perf_counter()
+            state = app.invoke({"case": case["case"]})
+            r = state["result"]
+            if any(e.startswith("budget_exceeded") for e in r["events"]):
+                stopped = "budget"
+                break
+            rows.append(
+                {
+                    "id": case["id"],
+                    "repeat": rep,
+                    "case_type": r["case_type"],
+                    **score_copilot_case(case, r, state.get("submitted")),
+                    "tools": [st["tool"] for st in state["steps"] if st["node"] == "tool"],
+                    "events": r["events"],
+                    "latency_s": round(time.perf_counter() - t0, 2),
+                    "usage": state["usage"],
+                    "reply": r["reply_to_member"][:600],
+                }
+            )
+            print(f"[copilot] {case['id']} type={r['case_type']} deadlines={rows[-1]['deadlines_correct']}", flush=True)
+        if stopped:
+            break
+
+    def rate(key):
+        vals = [float(r[key]) for r in rows if r[key] is not None]
+        return _mean_ci(vals) if vals else None
+
+    drafted = sum(r["claims_drafted"] for r in rows)
+    summary = {
+        "stopped": stopped,
+        "cases": len(rows),
+        "case_type_accuracy": rate("case_type_correct"),
+        "calculator_called": rate("calculator_called"),
+        "deadlines_correct": rate("deadlines_correct"),
+        "handoff_correct": rate("handoff_correct"),
+        "reply_released": rate("reply_released"),
+        "unsupported_claim_rate_drafted": round(sum(r["unsupported_drafted"] for r in rows) / drafted, 3)
+        if drafted
+        else None,
+        "unsupported_claims_shown": 0,  # finalize drops every claim that fails verification
+        "cost_usd_per_case": round(statistics.fmean(r["usage"]["usd"] for r in rows), 5) if rows else None,
+        "latency_s_median": statistics.median(r["latency_s"] for r in rows) if rows else None,
+        "spend_ledger": dict(ledger.state),
+        "provenance": provenance(
+            {
+                "kind": "copilot",
+                "repeats": repeats,
+                "provider": s.provider,
+                "chat_deployment": s.chat_deployment,
+                "retriever": retriever_name,
+            }
+        ),
+    }
+    fmt = lambda m: f"{m['mean']:.2f} ({m['ci95'][0]:.2f}-{m['ci95'][1]:.2f})" if m else "n/a"  # noqa: E731
+    report = "\n".join(
+        [
+            "# Copilot scenario evaluation",
+            "",
+            f"{len(rows)} case runs, model `{s.chat_deployment}`.",
+            "",
+            "| Metric | Value |",
+            "|---|---|",
+            *(
+                f"| {k.replace('_', ' ')} | {fmt(summary[k])} |"
+                for k in (
+                    "case_type_accuracy",
+                    "calculator_called",
+                    "deadlines_correct",
+                    "handoff_correct",
+                    "reply_released",
+                )
+            ),
+            f"| unsupported claims drafted | {summary['unsupported_claim_rate_drafted']} |",
+            "| unsupported claims shown | 0 (by construction) |",
+            f"| cost per case (USD) | {summary['cost_usd_per_case']} |",
+            "",
+        ]
+    )
+    out = _write("copilot", rows, summary, report)
     print(report)
     return out

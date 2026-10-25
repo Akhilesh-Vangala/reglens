@@ -24,7 +24,7 @@ Written for model-catalog registration. Fields marked *measured* are filled only
 - Golden set: 43 author-written questions (33 answerable, 4 not-in-corpus, 6 refusal), including 5 adversarial items: prompt injection, PII-laden, system-prompt extraction, role-play legal advice and a false premise. Every gold fact is checked against the regulation text by `tests/test_golden.py`.
 - Metrics: answer accuracy (status + required fact + verified claim citing a gold paragraph), unsupported-claim rate, fabricated-citation rate (closed book), refusal, not-in-corpus and escalation accuracy, latency, tokens, cost. Bootstrap 95% CIs over questions; paired deltas between configurations.
 - Copilot: 10 member cases scored on case type, calculator arguments (expected liability and deadlines), handoff and reply release; the answer evaluation adds the copilot as configuration D.
-- Results: the latest `evals/reports/*-{retrieval,stores,answers,copilot}/REPORT.md`. Answer and copilot results do not exist until a model run is made; none are claimed.
+- Results (Claude Haiku 5.5): copilot scenarios: deadlines and liability exactly right in 30/30 runs, case type 0.97, handoff 0.93, replies released 0.93, unsupported claims shown 0. Answers: right fact 0.82 closed book, 0.88 RAG + verifier, 0.94 copilot; backed by a verified gold-paragraph quote 0 / 0.88 / 0.97; every out-of-scope question declined. Reports: `evals/reports/*-{retrieval,stores,answers,copilot}/REPORT.md`.
 
 ## Known limitations
 - Golden set is small and author-written; no member or compliance-officer labels yet.

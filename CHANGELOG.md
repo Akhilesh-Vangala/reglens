@@ -14,11 +14,16 @@ First evaluated release: the copilot and pipeline measured with a real model (Cl
   only from the calculator, a verified quote or the member's own message (sums of member amounts allowed),
   mandatory handoff for disputes, withheld replies for anything unsupported.
 - Server-sent-event stream of agent steps; recorded real runs replayed in the demo.
+- Copilot v3: `not_covered` (benign, redirect) separated from `out_of_scope` (refuse); prompt caching on every turn
+  (64–74% of input from cache) with cache-aware, never-under-counting cost accounting.
 
-**Evaluation**
-- Copilot scenarios: 10 member cases × 3 repeats, scored on case type, calculator arguments, liability and
-  deadlines, handoff and release; expectations derived from the calculator and tested.
-- Answer evaluation: closed book vs RAG vs RAG + verifier vs copilot on 43 golden questions.
+**Evaluation (Claude Haiku 5.5; $0.47 for everything)**
+- Copilot scenarios, 30 case runs: deadlines and liability exactly right 1.00, case type 0.97, handoff 0.93,
+  replies released 0.93, unsupported claims shown 0, $0.0033 per case.
+- Answer evaluation, 43 questions: right fact closed book 0.82 / RAG + verifier 0.88 / copilot 0.94; answers backed
+  by a verified quote from the gold paragraph 0 / 0.88 / 0.97; every out-of-scope question declined; no unsupported
+  claim shown. Copilot vs closed book on right fact is not significant (+0.12, CI [0.00, +0.27]).
+- Like-for-like metrics and `reglens eval rescore` (recompute a report from stored rows, no model calls).
 
 **Fixes found by real-model runs**
 - Tools were exposed under Pydantic class names; nested arguments arrived stringified; submissions failed

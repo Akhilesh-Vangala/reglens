@@ -2,7 +2,7 @@
 
 A member-service copilot for credit-union staff, grounded in federal consumer-banking regulations.
 
-**Live demo: https://reglens-blush.vercel.app**. The deadline calculator, the "try to fool the checker" panel, semantic search and the citation-graph explorer all run with no key. Copilot answering turns on once a model key and the rate limiter are configured.
+**Live demo: https://reglens-blush.vercel.app**. The Copilot tab replays real recorded runs (Claude Haiku 5.5), including one where the verifier withholds a reply. The deadline calculator, the "try to fool the checker" panel, semantic search and the citation-graph explorer run live with no key. Live answering turns on only with a model key and the Redis rate limiter.
 
 A representative pastes what a member said: "my debit card was stolen Tuesday, I called the next morning, there's a $400 charge I didn't make". The copilot:
 - classifies the case
@@ -75,9 +75,9 @@ The obvious defaults would have been wrong:
 | | HNSW recall@8 vs exact | 1.00 |
 | Neo4j 5.26 (2,371 nodes, 2,276 relationships) | neighbors identical to in-memory graph | 2,371/2,371 nodes |
 
-### Answers
+### Answers (Claude Haiku 5.5, 43 questions)
 
-`reglens eval answers` compares four configurations on 43 questions, scored by one function:
+`reglens eval answers` scores four configurations with one function:
 - **A**, closed book
 - **B**, RAG without the verifier
 - **C**, RAG with the verifier
@@ -85,26 +85,54 @@ The obvious defaults would have been wrong:
 
 The 43 questions split into 33 answerable, 4 out of corpus and 6 that should be refused. Five are adversarial: prompt injection, PII-laden, system-prompt extraction, role-played legal advice and a false premise.
 
-Metrics:
-- answer accuracy: correct status, plus the required fact, plus a verified claim citing a gold paragraph
-- unsupported-claim rate before and after the verifier
-- fabricated-citation rate for the closed-book configuration
-- refusal, out-of-corpus and escalation accuracy
-- tokens, latency and cost
-- paired deltas between configurations
+"Answer accuracy" is stricter for retrieval configurations, since it also requires a verified quote from a gold paragraph. So the like-for-like columns below use one definition for every configuration:
 
-`reglens eval copilot` runs 10 realistic member cases ([evals/copilot_cases.jsonl](evals/copilot_cases.jsonl)). The cases include relative dates ("yesterday"), a missed 60-day statement window, a new-account extension, a legal-advice request and a prompt injection embedded in a real case. Each case is scored on:
-- case-type accuracy
-- whether the agent called the calculator
-- whether the calculator's output matches the expected liability and deadlines, i.e. whether the agent read the dates correctly
-- handoff correctness
-- whether the reply was released
+| Configuration | Right fact | Answer backed by a verified quote from the gold paragraph | Declined when it should | Unsupported claims shown | Cost / question |
+|---|---|---|---|---|---|
+| A, closed book | 0.82 (0.67–0.94) | n/a (no sources) | 1.00 | 0.9% fabricated citations | $0.0006 |
+| B, RAG, no verifier (k=8) | 0.82 (0.70–0.94) | 0.79 (0.64–0.91) | 1.00 | 0% | $0.0009 |
+| C, RAG + verifier (k=12) | 0.88 (0.76–0.97) | 0.88 (0.76–0.97) | 1.00 | 0% | $0.0010 |
+| **D, copilot** | **0.94 (0.85–1.00)** | **0.97 (0.91–1.00)** | **1.00** | **0%** | **$0.0013** |
 
-Expected values are derived by running the calculator on reference arguments, and `tests/test_copilot_cases.py` keeps them in sync with the code.
+Run 1 is [20261025-155616](evals/reports/20261025-155616-answers/REPORT.md) and run 2 is [20261025-161115](evals/reports/20261025-161115-answers/REPORT.md), with 95% bootstrap CIs over questions.
 
-Model runs refuse to start without a USD cap. `--dry-run` prints the worst-case cost: $0.26 for the copilot cases, and $7.53 for the full answer evaluation at 3 repeats, both on Claude Haiku 5.5.
+**What this shows:**
+- **A small modern model already knows these well-known rules.** Closed book is right 82% of the time, so the system's value isn't raw accuracy.
+- **Its value is verifiability.** The copilot backs 97% of answered questions with a checked quote from the exact paragraph, against none closed book, and every unsupported claim a model drafted was removed before display.
+- **The copilot's gain over closed book is not significant.** On right fact it is +0.12, 95% CI [0.00, +0.27], so on 33 questions it is not claimed.
 
-*Neither evaluation has been run yet. No answer-quality numbers are claimed until a run exists.* Every gold fact is checked against the regulation text in CI (`tests/test_golden.py`), so if the law changes, the labels fail before any model call does.
+**Two changes were measured between runs:**
+- **k 8 → 12:** chosen from the retrieval curve alone, recall@8 0.85 to recall@12 0.91, flat after.
+- **A `not_covered` case type:** the copilot had scored 0.00 on out-of-corpus questions because benign "not covered" questions and refusals shared one label. It now scores 1.00.
+
+### Copilot scenarios (10 member cases × 3 repeats)
+
+`reglens eval copilot` runs 10 realistic cases ([evals/copilot_cases.jsonl](evals/copilot_cases.jsonl)): relative dates ("yesterday"), a missed 60-day statement window, a new-account extension, a legal-advice request and a prompt injection inside a real case. Expected liabilities and deadlines come from running the calculator on reference arguments, which `tests/test_copilot_cases.py` keeps in sync with the code.
+
+| Metric | 30 case runs |
+|---|---|
+| Case type correct | 0.97 (0.90–1.00) |
+| Calculator called when dates were given | 1.00 |
+| Liability and deadlines exactly right (the agent read the dates correctly) | **1.00** |
+| Handoff correct | 0.93 (0.83–1.00) |
+| Reply released | 0.93 (0.81–1.00) |
+| Claims drafted that failed verification (removed) | 3.7% |
+| Unsupported claims shown | **0** |
+| Cost per case | $0.0033 |
+
+The misses are informative:
+- **Over-escalation:** a general check-hold question got a ticket it didn't need.
+- **Correctly withheld replies:** two drafts stated the general $50 and $500 tiers without a verified quote or calculator output behind them.
+
+The first copilot run also surfaced two verifier false positives, both fixed and tested:
+- a total of member-given amounts
+- a member's date written without a year
+
+Model runs refuse to start without a USD cap, and `--dry-run` prints the worst-case cost first. The whole evaluation programme so far, including retries and recorded runs, cost **$0.47**.
+
+### Prompt caching
+
+The copilot requests one cache breakpoint per turn on the Anthropic API. On real runs **64–74% of input tokens were read from cache**, which cut per-case cost by about 31% at Haiku's cache-read rate. Spend accounting bills cache writes at 1.25× and reads at the configured cache price. When no cache price is set, reads are billed at the full input price, so caching can never make the cap under-count.
 
 ## Deterministic components
 

@@ -35,16 +35,14 @@ reglens = "reglens.cli:main"
 reglens-serve = "reglens.server.app:main"
 
 [tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-"reglens.server" = ["static/*"]
+where = ["backend/src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
+testpaths = ["backend/tests"]
+pythonpath = ["backend/src"]
 
 [tool.ruff]
+src = ["backend/src", "backend"]
 line-length = 120
 target-version = "py311"
 

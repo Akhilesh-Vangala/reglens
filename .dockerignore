@@ -2,6 +2,8 @@
 .git
 .venv
 traces
+frontend/e2e
+backend/tests
 **/__pycache__
 .pytest_cache
 .ruff_cache

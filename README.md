@@ -1,8 +1,52 @@
+<p align="center">
+  <a href="https://github.com/Akhilesh-Vangala/reglens/actions/workflows/ci.yml"><img src="https://github.com/Akhilesh-Vangala/reglens/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://reglens-blush.vercel.app"><img src="https://img.shields.io/badge/live%20demo-reglens--blush.vercel.app-4f46e5?style=flat-square" alt="Live demo"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-334155?style=flat-square" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/license-MIT-334155?style=flat-square" alt="MIT">
+</p>
+
 # RegLens
 
-A member-service copilot for credit-union staff, grounded in federal consumer-banking regulations.
+A member-service copilot for credit-union staff, grounded in the federal consumer-banking regulations
+(Regulation E, Regulation Z, Regulation CC, NCUA Part 707). **The model proposes; deterministic code decides** what
+reaches the member: every claim is a verified verbatim quote, every date and dollar limit comes from a calculator, and
+anything unsupported goes to a person.
 
-**Live demo: https://reglens-blush.vercel.app**. The Copilot tab replays real recorded runs (Claude Haiku 5.5), including one where the verifier withholds a reply. The deadline calculator, the "try to fool the checker" panel, semantic search and the citation-graph explorer run live with no key. Live answering turns on only with a model key and the Redis rate limiter.
+[**Open the live demo ↗**](https://reglens-blush.vercel.app) · [Evaluation reports](evals/reports/) · [Model card](docs/MODEL_CARD.md) · [Changelog](CHANGELOG.md)
+
+The demo's Copilot tab replays real recorded runs (Claude Haiku 5.5), including one where the verifier withholds a
+reply. The deadline calculator, the "try to fool the checker" panel, semantic search and the citation-graph explorer
+run live with no key. Live answering turns on only with a model key and the Redis rate limiter.
+
+## At a glance
+
+| What was measured | Result |
+|---|---|
+| Copilot answers backed by a verified quote from the gold paragraph | **0.97** (95% CI 0.91–1.00), vs none closed book |
+| Right fact, copilot vs closed book (43 questions) | 0.94 vs 0.82 (gain not significant, CI includes 0) |
+| Unsupported claims shown to a member, any configuration | **0** |
+| Liability and deadlines exactly right (10 member cases × 3 repeats) | **1.00** |
+| Retrieval recall@5, dense bge vs BM25 (33 questions) | **0.76** vs 0.24 |
+| Cost per copilot case · input tokens read from prompt cache | **$0.0033** · 64–74% |
+| Qdrant and Neo4j parity with the in-memory reference | 43/43 queries · 2,371/2,371 nodes |
+| Tests in CI | 140 pytest (real Qdrant and Neo4j) · 23 Playwright + axe WCAG 2 AA · Kubernetes deploy and smoke test |
+
+All of it cost **$0.47** in model spend, and every report records the corpus hash, golden-set hash, prompt version
+and git commit.
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Agent and LLM | LangGraph tool-calling agent, Claude (Anthropic) with prompt caching; Azure OpenAI and OpenAI providers |
+| Retrieval | bge-small-en-v1.5 dense (ONNX, fastembed), BM25, RRF hybrid, cross-encoder rerank, Qdrant |
+| Knowledge graph | Citation graph parsed from the regulation text, served from memory or Neo4j |
+| Deterministic core | Verbatim-quote verifier, Reg E / Reg Z deadline calculator, PII guard, USD spend ledger |
+| Service | FastAPI, server-sent events, Redis rate limits and daily cap, strict CSP, OpenTelemetry `gen_ai.*` spans |
+| Web console | HTML, CSS and JavaScript with no build step, Playwright and axe tests |
+| Infrastructure | Docker, Docker Compose, Kubernetes (kustomize, HPA, PDB, NetworkPolicy), Vercel, GitHub Actions |
+
+## How it works
 
 A representative pastes what a member said: "my debit card was stolen Tuesday, I called the next morning, there's a $400 charge I didn't make". The copilot:
 - classifies the case
@@ -40,7 +84,7 @@ flowchart LR
 
 A second, fixed pipeline (guard → retrieve → generate → verify → one retry → finalize) answers single questions. It is the system under test in the hallucination evaluation.
 
-## What is measured
+## Results in detail
 
 Every report under [evals/reports/](evals/reports/) records:
 - the corpus manifest hash
@@ -107,7 +151,7 @@ Run 1 is [20261025-155616](evals/reports/20261025-155616-answers/REPORT.md) and 
 
 ### Copilot scenarios (10 member cases × 3 repeats)
 
-`reglens eval copilot` runs 10 realistic cases ([evals/copilot_cases.jsonl](evals/copilot_cases.jsonl)): relative dates ("yesterday"), a missed 60-day statement window, a new-account extension, a legal-advice request and a prompt injection inside a real case. Expected liabilities and deadlines come from running the calculator on reference arguments, which `tests/test_copilot_cases.py` keeps in sync with the code.
+`reglens eval copilot` runs 10 realistic cases ([evals/copilot_cases.jsonl](evals/copilot_cases.jsonl)): relative dates ("yesterday"), a missed 60-day statement window, a new-account extension, a legal-advice request and a prompt injection inside a real case. Expected liabilities and deadlines come from running the calculator on reference arguments, which `backend/tests/test_copilot_cases.py` keeps in sync with the code.
 
 | Metric | 30 case runs |
 |---|---|
@@ -179,7 +223,7 @@ pytest -q                     # unit, golden, calculator, copilot, server; store
 reglens eval retrieval        # downloads bge-small on first run
 reglens-serve                 # http://127.0.0.1:8000  (API reference at /api/docs)
 reglens check-law             # has any in-scope regulation been amended since the snapshot?
-cd e2e && npm ci && npx playwright install chromium && npx playwright test   # browser flows + axe WCAG 2 AA, both themes
+cd frontend/e2e && npm ci && npx playwright install chromium && npx playwright test   # browser + axe WCAG 2 AA
 ```
 
 **Full stack (app + Qdrant + Neo4j + loader):** `docker compose up --build`
@@ -211,24 +255,32 @@ reglens eval answers --dry-run --repeats 3 && reglens eval answers --repeats 3
 
 The copilot is also served as server-sent events (`POST /api/copilot/stream`): one event per agent turn and tool call, then the verified result. The demo's pipeline view lights up from these events.
 
-## Layout
+## Repository layout
 
-```
-src/reglens/corpus/      eCFR fetch (hashed), paragraph parser (6-level CFR labels, interpretations), chunker,
-                         law-change monitor
-src/reglens/retrieval/   BM25, dense, RRF hybrid, bge + cross-encoder, graph expansion, Qdrant, Azure AI Search
-src/reglens/kg/          citation graph; Neo4j store and GraphService
-src/reglens/timeline.py  Reg E / Reg Z deadline and liability calculator
-src/reglens/copilot.py   LangGraph tool-calling agent with deterministic finalize
-src/reglens/graph.py     LangGraph Q&A pipeline: guard → retrieve → generate → verify → finalize
-src/reglens/verify.py    verbatim quote verifier
-src/reglens/guard.py     PII masking, spend ledger
-src/reglens/eval/        golden-set runner, bootstrap CIs, paired deltas, store parity, reports
-src/reglens/server/      FastAPI service (SSE copilot stream, security headers, limits), demo UI (static/)
-deploy/k8s/              kustomize manifests + smoke test
-evals/golden.jsonl       43 labelled questions;  evals/copilot_cases.jsonl  10 member cases
-evals/reports/           every run, with provenance
-docs/MODEL_CARD.md       intended use, limits, evaluation, governance hooks
+```text
+backend/
+  src/reglens/
+    corpus/               eCFR fetch (hashed), paragraph parser (6-level CFR labels, interpretations), chunker,
+                          law-change monitor
+    retrieval/            BM25, dense, RRF hybrid, bge + cross-encoder, graph expansion, Qdrant
+    kg/                   citation graph; Neo4j store and GraphService
+    timeline.py           Reg E / Reg Z deadline and liability calculator
+    copilot.py            LangGraph tool-calling agent with deterministic finalize
+    graph.py              LangGraph Q&A pipeline: guard → retrieve → generate → verify → finalize
+    verify.py             verbatim quote verifier
+    guard.py              PII masking, spend ledger
+    eval/                 golden-set runner, bootstrap CIs, paired deltas, store parity, reports
+    server/               FastAPI service: SSE copilot stream, security headers, rate and spend limits
+  tests/                  unit, golden, calculator, copilot, server and store tests
+  scripts/                recording real copilot runs for the demo
+frontend/
+  public/                 web console served by FastAPI (no build step)
+  e2e/                    Playwright flows and axe accessibility scans
+api/index.py              Vercel entry point (the same FastAPI app)
+data/                     pinned eCFR snapshot, processed chunks and embeddings, recorded demo runs
+evals/                    golden.jsonl (43 questions), copilot_cases.jsonl (10 cases), reports/ with provenance
+deploy/k8s/               kustomize manifests and smoke test
+docs/MODEL_CARD.md        intended use, limits, evaluation, governance hooks
 ```
 
 ## Limitations

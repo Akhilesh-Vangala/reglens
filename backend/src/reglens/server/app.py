@@ -41,7 +41,8 @@ from reglens.timeline import RULES
 from reglens.verify import check_claims, normalize
 
 CHUNKS = ROOT / "data" / "processed" / "chunks.jsonl"
-STATIC = Path(__file__).parent / "static"
+# The web UI lives in frontend/public/ at the repository root; REGLENS_WEB_DIR overrides it for other layouts.
+STATIC = Path(os.getenv("REGLENS_WEB_DIR") or ROOT / "frontend" / "public")
 REPORTS = ROOT / "evals" / "reports"
 
 app = FastAPI(title="RegLens", version="1.1.0", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
@@ -242,7 +243,7 @@ COPILOT_CASES = [
 
 @app.get("/api/copilot/recorded")
 def copilot_recorded():
-    """Real copilot runs captured with scripts/record_copilot_runs.py (model, date and commit included), so the
+    """Real copilot runs captured with backend/scripts/record_copilot_runs.py (model, date and commit included), so the
     demo can show actual model output without a live key."""
     path = ROOT / "data" / "demo" / "copilot_runs.jsonl"
     runs = [json.loads(x) for x in path.read_text().splitlines() if x.strip()] if path.exists() else []

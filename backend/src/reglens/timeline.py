@@ -1,8 +1,8 @@
 """Deterministic deadline and liability calculator for member cases. The model never does date arithmetic.
 
 Every rule applied carries the citation and a verbatim quote of the regulation text it implements;
-tests/test_timeline.py fails if any quote is not found in the pinned corpus, so the calculator is checked against
-the law the same way the golden set is.
+backend/tests/test_timeline.py fails if any quote is not found in the pinned corpus, so the calculator is checked
+against the law the same way the golden set is.
 
 Business days: 12 CFR 1005.2(d) defines a business day by when the member's institution is open. We assume
 Monday-Friday excluding Federal Reserve holidays (a Sunday holiday is observed Monday; a Saturday holiday is not

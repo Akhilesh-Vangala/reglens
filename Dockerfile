@@ -8,11 +8,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
 
 WORKDIR /app
 COPY pyproject.toml README.md ./
-COPY src ./src
+COPY backend/src ./backend/src
 RUN pip install ".[serve,stores]"
 
 COPY data ./data
 COPY evals ./evals
+COPY frontend/public ./frontend/public
 # Embed the pinned corpus once at build time so the container starts warm and offline.
 RUN python -c "from reglens.eval.run import make_retriever; from reglens.retrieval import load_chunks; \
 from reglens.config import ROOT; make_retriever('dense_bge', load_chunks(ROOT/'data/processed/chunks.jsonl'))"

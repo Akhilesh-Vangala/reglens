@@ -4,8 +4,8 @@
     "api/index.py": {
       "maxDuration": 60,
       "memory": 2048,
-      "includeFiles": "{src/**,data/processed/**,data/demo/**,data/raw/manifest.json,evals/golden.jsonl,evals/reports/**/summary.json}",
-      "excludeFiles": "{tests/**,scripts/**,docs/**,data/raw/*.xml,evals/reports/**/results.jsonl,**/__pycache__/**}"
+      "includeFiles": "{backend/src/**,frontend/public/**,data/processed/**,data/demo/**,data/raw/manifest.json,evals/golden.jsonl,evals/reports/**/summary.json}",
+      "excludeFiles": "{backend/tests/**,backend/scripts/**,frontend/e2e/**,docs/**,data/raw/*.xml,evals/reports/**/results.jsonl,**/__pycache__/**}"
     }
   }
 }

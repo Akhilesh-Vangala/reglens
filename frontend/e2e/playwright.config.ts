@@ -16,7 +16,7 @@ export default defineConfig({
   use: { baseURL: `http://127.0.0.1:${PORT}`, trace: "retain-on-failure" },
   webServer: {
     command: `${python} -m uvicorn reglens.server.app:app --host 127.0.0.1 --port ${PORT}`,
-    cwd: "..",
+    cwd: "../..",
     url: `http://127.0.0.1:${PORT}/healthz`,
     env: { REGLENS_NO_DOTENV: "1", ANTHROPIC_API_KEY: "" },
     reuseExistingServer: !process.env.CI,

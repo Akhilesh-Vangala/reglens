@@ -2,7 +2,7 @@
 install:
 	python -m pip install -e ".[dev,serve]"
 lint:
-	ruff check src tests api scripts && ruff format --check src tests api scripts
+	ruff check backend api && ruff format --check backend api
 test:
 	pytest -q
 build:            ## fetch the pinned eCFR text, parse, chunk

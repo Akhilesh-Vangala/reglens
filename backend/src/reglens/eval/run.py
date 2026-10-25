@@ -572,7 +572,8 @@ def load_copilot_cases() -> list[dict]:
 
 def score_copilot_case(case: dict, result: dict, submitted: dict | None) -> dict:
     """Did the agent classify the case, extract the right dates into the calculator, hand off when it must, and
-    release a reply? Expected calculator outputs are derived from reference arguments (tests/test_copilot_cases)."""
+    release a reply? Expected calculator outputs are derived from reference arguments
+    (backend/tests/test_copilot_cases)."""
     computed = [i for t in result["timelines"] for i in t["items"]]
     hits = [
         any(

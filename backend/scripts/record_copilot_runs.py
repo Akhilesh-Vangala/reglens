@@ -1,4 +1,4 @@
-"""Record real copilot runs for the demo's replay panel: python scripts/record_copilot_runs.py C01 C04 C06 C09
+"""Record real copilot runs for the demo's replay panel: python backend/scripts/record_copilot_runs.py C01 C04 C06 C09
 
 Each run is the exact event sequence /api/copilot/stream emits (start, one step per agent turn or tool call,
 result), with the model, date and git commit, written to data/demo/copilot_runs.jsonl. Spend goes through the same

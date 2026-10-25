@@ -9,7 +9,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-ROOT = Path(os.getenv("REGLENS_ROOT") or Path(__file__).resolve().parents[2])  # override when pip-installed
+ROOT = Path(os.getenv("REGLENS_ROOT") or Path(__file__).resolve().parents[3])  # override when pip-installed
 if not os.getenv("REGLENS_NO_DOTENV"):  # tests set this so a real key in .env can never be used by a test
     load_dotenv(ROOT / ".env")
 # Writable state (spend ledger, traces). Serverless filesystems are read-only except /tmp.

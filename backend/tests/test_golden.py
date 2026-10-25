@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 GOLDEN = [json.loads(line) for line in (ROOT / "evals" / "golden.jsonl").read_text().splitlines() if line.strip()]
 CHUNKS = [json.loads(line) for line in (ROOT / "data" / "processed" / "chunks.jsonl").read_text().splitlines()]
 

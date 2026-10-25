@@ -9,7 +9,7 @@ import pytest
 from reglens.corpus.chunk import chunk_passages
 from reglens.corpus.parse import parse_part
 
-RAW = Path(__file__).resolve().parents[1] / "data" / "raw"
+RAW = Path(__file__).resolve().parents[2] / "data" / "raw"
 MANIFEST = json.loads((RAW / "manifest.json").read_text())
 
 

@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
-      - run: ruff check src tests api scripts && ruff format --check src tests api scripts
+      - run: ruff check backend api && ruff format --check backend api
       - name: wait for neo4j
         run: for i in $(seq 1 60); do nc -z localhost 7687 && break; sleep 2; done
       - run: pytest -q -rs
@@ -48,18 +48,18 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: e2e
+        working-directory: frontend/e2e
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: pip install -e "..[serve]"
+      - run: pip install -e "../..[serve]"
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: e2e/package-lock.json
+          cache-dependency-path: frontend/e2e/package-lock.json
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
@@ -67,4 +67,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: e2e/test-results
+          path: frontend/e2e/test-results

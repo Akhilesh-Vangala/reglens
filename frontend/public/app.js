@@ -286,7 +286,7 @@ async function runCopilot() {
   } finally { endRun(ctl); }
 }
 
-// Recorded runs: real model output captured by scripts/record_copilot_runs.py, replayed at its recorded pace
+// Recorded runs: real model output captured by backend/scripts/record_copilot_runs.py, replayed at its recorded pace
 // (instantly when the visitor prefers reduced motion).
 let RECORDED = [];
 const recordedReady = api("/api/copilot/recorded").then((r) => {

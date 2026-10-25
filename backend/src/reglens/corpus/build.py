@@ -10,7 +10,7 @@ from reglens.corpus.chunk import chunk_passages
 from reglens.corpus.fetch import fetch
 from reglens.corpus.parse import parse_part
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[4]
 
 
 def build(as_of: str, refetch: bool) -> Path:

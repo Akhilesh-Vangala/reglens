@@ -52,12 +52,30 @@ def amounts_in(text: str) -> set[float]:
     return {round(float(whole.replace(",", "") + "." + (cents or "0")), 2) for whole, cents in MONEY.findall(text)}
 
 
-def dates_in(text: str) -> set[str]:
-    """ISO form of every calendar date written in `text` (ISO, M/D/YYYY, or 'November 4, 2026')."""
+YEARLESS_DATE = re.compile(
+    r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? (\d{1,2})(?:st|nd|rd|th)?\b(?!,? 20\d{2})",
+    re.IGNORECASE,
+)
+
+
+def dates_in(text: str, default_year: int | None = None) -> set[str]:
+    """ISO form of every calendar date written in `text` (ISO, M/D/YYYY, 'November 4, 2026'). With `default_year`,
+    month-day dates without a year ('October 23') are read in that year; used for the member's own message."""
     out = {f"{y}-{m}-{d}" for y, m, d in ISO_DATE.findall(text)}
     out |= {f"{y}-{int(m):02d}-{int(d):02d}" for m, d, y in US_DATE.findall(text)}
     out |= {f"{y}-{MONTHS[mon.lower()[:3]]:02d}-{int(d):02d}" for mon, d, y in WORD_DATE.findall(text)}
+    if default_year:
+        out |= {f"{default_year}-{MONTHS[mon.lower()[:3]]:02d}-{int(d):02d}" for mon, d in YEARLESS_DATE.findall(text)}
     return out
+
+
+def subset_sums(amounts: set[float], limit: int = 8) -> set[float]:
+    """Every sum of two or more of the given amounts (capped at `limit` amounts): a total of member-given figures
+    is arithmetic code can check, unlike a figure the model produced from nowhere."""
+    vals, sums = sorted(amounts)[:limit], {0.0}
+    for v in vals:
+        sums |= {round(x + v, 2) for x in sums}
+    return sums - {0.0} - set(vals)
 
 
 SYSTEM = """You are a member-service copilot at a credit union. A representative pastes what a member said.
@@ -242,7 +260,8 @@ def build_copilot(
     """`llm` is any LangChain chat model supporting bind_tools (ChatAnthropic, ChatOpenAI, AzureChatOpenAI)."""
     t = tracer()
     model = llm.bind_tools(tool_specs(), strict=True)
-    system = SYSTEM.format(today=(today or date.today()).isoformat())
+    today_ = today or date.today()
+    system = SYSTEM.format(today=today_.isoformat())
 
     def guard(state: CopilotState) -> CopilotState:
         r = redact(state["case"])
@@ -390,11 +409,13 @@ def build_copilot(
             events.append(f"dropped_unverified_claims: {len(sub['claims']) - len(verified)}")
         computed = {i["due"] for tl_ in state["timelines"] for i in tl_["items"] if i.get("due")}
         # dates the member already knows (from their own message) are allowed; any other date must be computed
-        stray = sorted(dates_in(sub["reply_to_member"]) - computed - dates_in(state["case"]))
+        member_dates = dates_in(state["case"], default_year=today_.year)
+        stray = sorted(dates_in(sub["reply_to_member"]) - computed - member_dates)
         if stray:
             events.append(f"dates_not_from_calculator: {stray}")
         # dollar amounts must come from a verified quote, the calculator, or the member's own message
-        known = amounts_in(" ".join(c["quote"] for c in verified)) | amounts_in(state["case"])
+        member_amounts = amounts_in(state["case"])
+        known = amounts_in(" ".join(c["quote"] for c in verified)) | member_amounts | subset_sums(member_amounts)
         known |= {
             round(float(i["amount"]), 2)
             for t_ in state["timelines"]

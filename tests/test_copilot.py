@@ -198,3 +198,24 @@ def test_stringified_nested_arguments_are_decoded():
         ]
     )
     assert out["timelines"][0]["items"][0]["amount"] == 50.0
+
+
+def test_member_dates_without_year_and_sums_of_member_amounts_are_supported():
+    from reglens.copilot import dates_in, subset_sums
+
+    assert "2026-10-23" in dates_in("I called on October 23.", default_year=2026)
+    assert dates_in("by November 4, 2026", default_year=2025) == {"2026-11-04"}  # an explicit year wins
+    assert 940.0 in subset_sums({40.0, 900.0}) and 40.0 not in subset_sums({40.0, 900.0})
+
+
+def test_total_of_member_amounts_does_not_withhold_but_an_invented_total_does():
+    case = "Card lost 2026-10-01, reported 2026-10-23. Charges: $40 on 2026-10-02 and $900 on 2026-10-15."
+    for total, withheld in ((940, False), (975, True)):
+        llm = ScriptedChat(
+            [
+                [("search_regulations", {"query": "x"})],
+                [submit(f"Together that is ${total}; your liability is at most $50.", [GOOD])],
+            ]
+        )
+        out = build_copilot(Fixed(), GRAPH, CORPUS, llm, today=date(2026, 10, 25)).invoke({"case": case})
+        assert out["result"]["draft_withheld"] is withheld, total

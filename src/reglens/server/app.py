@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from reglens.config import ROOT, ModelSettings
+from reglens.config import ROOT, STATE_DIR, ModelSettings
 from reglens.corpus.chunk import Chunk
 from reglens.guard import SpendLedger, redact
 from reglens.retrieval import BM25, load_chunks
@@ -66,7 +66,7 @@ def model_status() -> dict:
 @lru_cache(maxsize=1)
 def ledger() -> SpendLedger:
     cap = os.getenv("REGLENS_USD_CAP")
-    return SpendLedger(ROOT / "traces" / "spend.json", float(cap) if cap else None)
+    return SpendLedger(STATE_DIR / "spend.json", float(cap) if cap else None)
 
 
 def _hit(h, rank: int) -> dict:

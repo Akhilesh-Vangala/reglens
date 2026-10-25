@@ -6,9 +6,14 @@ The cross-encoder rescores the fused top candidates jointly with the query, whic
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 from reglens.retrieval import Hit
+
+if os.getenv("VERCEL"):  # model weights download to the only writable path on cold start
+    os.environ.setdefault("FASTEMBED_CACHE_PATH", "/tmp/fastembed")
 
 BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 

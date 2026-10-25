@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 
 ROOT = Path(os.getenv("REGLENS_ROOT") or Path(__file__).resolve().parents[2])  # override when pip-installed
 load_dotenv(ROOT / ".env")
+# Writable state (spend ledger, traces). Serverless filesystems are read-only except /tmp.
+STATE_DIR = Path(os.getenv("REGLENS_STATE_DIR") or ("/tmp/reglens" if os.getenv("VERCEL") else ROOT / "traces"))
 
 
 def _req(name: str) -> str:

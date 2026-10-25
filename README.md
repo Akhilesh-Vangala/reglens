@@ -1,10 +1,3 @@
-<p align="center">
-  <a href="https://github.com/Akhilesh-Vangala/reglens/actions/workflows/ci.yml"><img src="https://github.com/Akhilesh-Vangala/reglens/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://reglens-blush.vercel.app"><img src="https://img.shields.io/badge/live%20demo-reglens--blush.vercel.app-4f46e5?style=flat-square" alt="Live demo"></a>
-  <img src="https://img.shields.io/badge/python-3.11%2B-334155?style=flat-square" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/license-MIT-334155?style=flat-square" alt="MIT">
-</p>
-
 # RegLens
 
 A member-service copilot for credit-union staff, grounded in the federal consumer-banking regulations

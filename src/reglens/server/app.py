@@ -66,7 +66,7 @@ def model_status() -> dict:
         s = ModelSettings.from_env()
     except RuntimeError as exc:
         return {"configured": False, "reason": str(exc)}
-    return {"configured": True, "provider": s.provider, "chat": s.chat_deployment, "embedding": s.embedding_deployment}
+    return {"configured": True, "provider": s.provider, "chat": s.chat_deployment}
 
 
 @lru_cache(maxsize=1)

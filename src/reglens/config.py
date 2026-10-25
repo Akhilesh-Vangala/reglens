@@ -24,20 +24,19 @@ def _req(name: str) -> str:
 
 @dataclass(frozen=True)
 class ModelSettings:
-    """LLM_PROVIDER=azure (Azure OpenAI deployments), openai (OpenAI API or any OpenAI-compatible base URL) or
-    anthropic (Claude API; no embeddings, so use the local dense_bge retriever). The pipeline, prompts, schema
-    and verifier are identical for all; only the client differs."""
+    """Chat model settings. LLM_PROVIDER=anthropic (Claude API), azure (Azure OpenAI deployment) or openai (OpenAI
+    API or any OpenAI-compatible base URL). Prompts, schemas, tools and verification are identical for all three;
+    only the LangChain client differs. Embeddings are always the local bge model, so no provider needs an
+    embeddings endpoint."""
 
     provider: str
     endpoint: str
     api_key: str
     api_version: str
     chat_deployment: str
-    embedding_deployment: str
-    # USD per 1M tokens, operator supplied from the Azure pricing page; used only for reporting
+    # USD per 1M tokens from the provider's pricing page; drive the spend caps and cost reporting
     price_input_per_m: float | None
     price_output_per_m: float | None
-    price_embedding_per_m: float | None
 
     @classmethod
     def from_env(cls) -> ModelSettings:
@@ -45,9 +44,8 @@ class ModelSettings:
         prices = dict(
             price_input_per_m=f("PRICE_INPUT_PER_M"),
             price_output_per_m=f("PRICE_OUTPUT_PER_M"),
-            price_embedding_per_m=f("PRICE_EMBEDDING_PER_M"),
         )
-        provider = os.getenv("LLM_PROVIDER", "azure").lower()
+        provider = os.getenv("LLM_PROVIDER", "anthropic").lower()
         if provider == "openai":
             return cls(
                 provider="openai",
@@ -55,7 +53,6 @@ class ModelSettings:
                 api_key=_req("OPENAI_API_KEY"),
                 api_version="",
                 chat_deployment=_req("OPENAI_CHAT_MODEL"),
-                embedding_deployment=_req("OPENAI_EMBEDDING_MODEL"),
                 **prices,
             )
         if provider == "anthropic":
@@ -65,7 +62,6 @@ class ModelSettings:
                 api_key=_req("ANTHROPIC_API_KEY"),
                 api_version="",
                 chat_deployment=_req("ANTHROPIC_CHAT_MODEL"),
-                embedding_deployment="",
                 **prices,
             )
         if provider != "azure":
@@ -76,21 +72,5 @@ class ModelSettings:
             api_key=_req("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"),
             chat_deployment=_req("AZURE_OPENAI_CHAT_DEPLOYMENT"),
-            embedding_deployment=_req("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"),
             **prices,
-        )
-
-
-@dataclass(frozen=True)
-class AzureSearchSettings:
-    endpoint: str
-    api_key: str
-    index: str
-
-    @classmethod
-    def from_env(cls) -> AzureSearchSettings:
-        return cls(
-            endpoint=_req("AZURE_SEARCH_ENDPOINT"),
-            api_key=_req("AZURE_SEARCH_API_KEY"),
-            index=os.getenv("AZURE_SEARCH_INDEX", "reglens-2026-10-02"),
         )

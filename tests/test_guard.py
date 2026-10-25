@@ -76,7 +76,7 @@ def test_anthropic_settings_and_client_construct_without_network(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.setenv("ANTHROPIC_CHAT_MODEL", "claude-haiku-5-5")
     s = ModelSettings.from_env()
-    assert (s.provider, s.chat_deployment, s.embedding_deployment) == ("anthropic", "claude-haiku-5-5", "")
+    assert (s.provider, s.chat_deployment) == ("anthropic", "claude-haiku-5-5")
     assert ChatGenerator(s).model == "anthropic:claude-haiku-5-5"
 
 

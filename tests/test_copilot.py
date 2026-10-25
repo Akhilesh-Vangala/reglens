@@ -144,3 +144,36 @@ def test_agent_loop_is_bounded():
 def test_tool_errors_return_to_the_model_instead_of_crashing():
     out, _ = run([[("related_paragraphs", {"chunk_id": "nope"})], [submit("ok", [], case_type="out_of_scope")]])
     assert out["steps"][1]["result"].startswith("error: unknown chunk_id")
+
+
+def test_dollar_amount_not_backed_by_quote_calculator_or_member_withholds_the_reply():
+    out, _ = run(
+        [[("search_regulations", {"query": "x"})], [DEADLINES], [submit("You owe at most $75 of the $400.", [GOOD])]]
+    )
+    r = out["result"]
+    assert r["draft_withheld"] and any(e == "amounts_not_supported: [75.0]" for e in r["events"])
+
+
+def test_amounts_parser():
+    from reglens.copilot import amounts_in
+
+    assert amounts_in("$50, $1,250.75 and $ 500") == {50.0, 1250.75, 500.0}
+
+
+def test_part_filter_is_pushed_down_to_retrievers_that_support_it():
+    class Filtering(Fixed):
+        supports_filters = True
+
+        def __init__(self):
+            self.calls = []
+
+        def search(self, q, k=8, part=None):
+            self.calls.append(part)
+            return super().search(q, k)
+
+    r = Filtering()
+    llm = ScriptedChat(
+        [[("search_regulations", {"query": "x", "part": "1005"})], [submit("ok", [], case_type="out_of_scope")]]
+    )
+    build_copilot(r, GRAPH, CORPUS, llm, today=date(2026, 10, 25)).invoke({"case": "q"})
+    assert r.calls == ["1005"]

@@ -53,11 +53,9 @@ def test_ask_end_to_end_with_scripted_model(monkeypatch):
         "review_reason": "",
         "claims": [{"statement": "s", "chunk_id": chunk.id, "quote": quote}],
     }
+    monkeypatch.setattr(srv, "model_status", lambda: {"configured": True, "provider": "scripted", "chat": "x"})
     monkeypatch.setattr(
-        srv, "model_status", lambda: {"configured": True, "provider": "scripted", "chat": "x", "embedding": "y"}
-    )
-    monkeypatch.setattr(
-        srv.ModelSettings, "from_env", classmethod(lambda cls: cls("openai", "", "k", "", "x", "y", 0.1, 0.5, None))
+        srv.ModelSettings, "from_env", classmethod(lambda cls: cls("openai", "", "k", "", "x", 0.1, 0.5))
     )
     monkeypatch.setattr(srv, "limiter", lambda: srv.Limiter(srv_limits.MemoryStore(), 10, 1.0))
     monkeypatch.setattr(genmod, "ChatGenerator", lambda s: ScriptedGenerator([answer]))
@@ -77,7 +75,7 @@ def test_span_maps_normalized_quote_back_to_source(text, quote):
     assert s and srv.normalize(text[s[0] : s[1]]) == srv.normalize(quote)
 
 
-SETTINGS = classmethod(lambda cls: cls("anthropic", "", "k", "", "claude-haiku-5-5", "", 0.1, 0.5, None))
+SETTINGS = classmethod(lambda cls: cls("anthropic", "", "k", "", "claude-haiku-5-5", 0.1, 0.5))
 
 
 def _configured(monkeypatch, store, per_hour=10, daily=1.0):

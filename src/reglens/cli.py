@@ -1,7 +1,6 @@
 """reglens CLI.
 
 reglens build [--refetch]                       fetch, parse and chunk the pinned corpus
-reglens index                                   embed chunks and create/upload the Azure AI Search index
 reglens ask "question" [--retriever dense_bge]  answer one question through the governed pipeline
 reglens eval retrieval --retrievers bm25 dense_bge hybrid_bge dense_bge+rerank
 reglens eval answers --configs A_closed_book B_rag_no_verify C_rag_verified
@@ -23,7 +22,6 @@ def main() -> None:
     b = sub.add_parser("build")
     b.add_argument("--as-of", default="2026-10-02")
     b.add_argument("--refetch", action="store_true")
-    sub.add_parser("index")
     sub.add_parser("load-stores", help="load the citation graph into Neo4j and the vectors into Qdrant")
     a = sub.add_parser("ask")
     a.add_argument("question")
@@ -41,25 +39,6 @@ def main() -> None:
         from reglens.corpus.build import build
 
         build(args.as_of, args.refetch)
-    elif args.cmd == "index":
-        from reglens.config import AzureSearchSettings, ModelSettings
-        from reglens.retrieval import Dense, load_chunks
-        from reglens.retrieval.azure import AzureHybrid, ModelEmbedder
-
-        chunks = load_chunks(ROOT / "data" / "processed" / "chunks.jsonl")
-        emb = ModelEmbedder(ModelSettings.from_env())
-        dense = Dense(chunks, emb, ROOT / "data" / "processed" / f"embeddings_{emb.deployment}.npz")
-        az = AzureHybrid(AzureSearchSettings.from_env(), emb, chunks)
-        az.create_index(dense.matrix.shape[1])
-        print(
-            json.dumps(
-                {
-                    "uploaded": az.upload(chunks, dense.matrix),
-                    "dims": int(dense.matrix.shape[1]),
-                    "embedding_tokens": emb.tokens_used,
-                }
-            )
-        )
     elif args.cmd == "load-stores":
         from reglens.eval.run import make_retriever
         from reglens.kg import build_graph

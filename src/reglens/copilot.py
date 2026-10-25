@@ -44,6 +44,14 @@ WORD_DATE = re.compile(
 )
 
 
+MONEY = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{2}))?")
+
+
+def amounts_in(text: str) -> set[float]:
+    """Every dollar amount written in `text`, as a float rounded to cents."""
+    return {round(float(whole.replace(",", "") + "." + (cents or "0")), 2) for whole, cents in MONEY.findall(text)}
+
+
 def dates_in(text: str) -> set[str]:
     """ISO form of every calendar date written in `text` (ISO, M/D/YYYY, or 'November 4, 2026')."""
     out = {f"{y}-{m}-{d}" for y, m, d in ISO_DATE.findall(text)}
@@ -245,7 +253,10 @@ def build_copilot(
             try:
                 if name == "search_regulations":
                     a = SearchArgs(**args)
-                    hits = [h for h in retriever.search(a.query, 40) if not a.part or h.chunk.part == a.part][:k]
+                    if a.part and getattr(retriever, "supports_filters", False):
+                        hits = retriever.search(a.query, k, part=a.part)  # filtered inside Qdrant (payload index)
+                    else:
+                        hits = [h for h in retriever.search(a.query, 40) if not a.part or h.chunk.part == a.part][:k]
                     payload = [
                         {"chunk_id": h.chunk.id, "citation": h.chunk.citation, "text": h.chunk.source_text()}
                         for h in hits
@@ -311,13 +322,18 @@ def build_copilot(
         sub = state.get("submitted") or {}
         events = []
         if not sub:
-            events.append("no_submission")
+            budget = next(
+                (s["error"] for s in state["steps"] if s.get("error", "").startswith("budget_exceeded")), None
+            )
+            events.append(budget or "no_submission")
             sub = {
                 "case_type": "general_question",
                 "reply_to_member": "",
                 "claims": [],
                 "needs_human_review": True,
-                "review_reason": "the copilot did not produce an answer",
+                "review_reason": "spend limit reached before an answer"
+                if budget
+                else "the copilot did not produce an answer",
                 "handoff": None,
             }
         seen = {i: corpus[i] for i in state["seen"] if i in corpus}
@@ -330,7 +346,18 @@ def build_copilot(
         stray = sorted(dates_in(sub["reply_to_member"]) - computed - dates_in(state["case"]))
         if stray:
             events.append(f"dates_not_from_calculator: {stray}")
-        withhold = (sub["case_type"] != "out_of_scope" and not verified) or bool(stray)
+        # dollar amounts must come from a verified quote, the calculator, or the member's own message
+        known = amounts_in(" ".join(c["quote"] for c in verified)) | amounts_in(state["case"])
+        known |= {
+            round(float(i["amount"]), 2)
+            for t_ in state["timelines"]
+            for i in t_["items"]
+            if i.get("amount") is not None
+        }
+        stray_amounts = sorted(amounts_in(sub["reply_to_member"]) - known)
+        if stray_amounts:
+            events.append(f"amounts_not_supported: {stray_amounts}")
+        withhold = (sub["case_type"] != "out_of_scope" and not verified) or bool(stray) or bool(stray_amounts)
         needs_review = sub["needs_human_review"] or withhold or sub["case_type"] in LIVE_CASES
         handoff = sub["handoff"]
         if sub["case_type"] in LIVE_CASES and not handoff:

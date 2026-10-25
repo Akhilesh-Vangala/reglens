@@ -1,9 +1,6 @@
-"""Hybrid retrieval: BM25 + dense vectors fused with reciprocal rank fusion (RRF).
-
-Two interchangeable backends share one interface:
-  LocalHybrid   BM25 implemented here + any Embedder; used for tests and ablations
-  AzureHybrid   Azure AI Search hybrid query (BM25 + HNSW vector, RRF fused by the service)
-"""
+"""Retrieval primitives behind one `Retriever` interface: BM25 (implemented here), dense cosine search over any
+`Embedder`, and reciprocal rank fusion. Production retrievers built on these live in local.py (bge, cross-encoder),
+graph.py (citation-graph expansion) and qdrant.py (vector database); eval/run.py:make_retriever names them all."""
 
 from __future__ import annotations
 

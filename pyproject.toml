@@ -19,7 +19,6 @@ dependencies = [
   "langchain-anthropic>=0.3",
   "langgraph>=0.2",
   "openai>=1.40",
-  "azure-search-documents>=11.5",
   "opentelemetry-sdk>=1.25",
   "python-dotenv>=1.0",
   "fastapi>=0.110",
@@ -32,7 +31,6 @@ stores = ["qdrant-client>=1.15", "neo4j>=5.20"]
 dev = ["pytest>=8", "ruff>=0.5", "uvicorn>=0.29", "qdrant-client>=1.15", "neo4j>=5.20"]
 
 [project.scripts]
-reglens-build = "reglens.corpus.build:main"
 reglens = "reglens.cli:main"
 reglens-serve = "reglens.server.app:main"
 

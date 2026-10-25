@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 from collections import Counter
 from pathlib import Path
@@ -39,15 +38,3 @@ def build(as_of: str, refetch: bool) -> Path:
     (out.parent / "corpus_stats.json").write_text(json.dumps(stats, indent=2))
     print(json.dumps(stats, indent=2))
     return out
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--as-of", default="2026-10-02", help="eCFR point-in-time date")
-    ap.add_argument("--refetch", action="store_true")
-    a = ap.parse_args()
-    build(a.as_of, a.refetch)
-
-
-if __name__ == "__main__":
-    main()

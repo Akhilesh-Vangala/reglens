@@ -1,7 +1,8 @@
 """Evaluation runner.
 
-  reglens eval retrieval --retrievers bm25 dense hybrid azure_hybrid
+  reglens eval retrieval --retrievers bm25 dense_bge hybrid_bge dense_bge+rerank graph_bge_s1
   reglens eval answers  --configs A_closed_book B_rag_no_verify C_rag_verified --repeats 1
+  reglens eval stores   (needs QDRANT_URL and NEO4J_URI)
 
 Writes evals/reports/<stamp>-<kind>/{results.jsonl, summary.json, REPORT.md}. A report records the
 corpus manifest hash, prompt version, model deployments and git commit so every number is reproducible.
@@ -82,20 +83,7 @@ def make_retriever(name: str, chunks: list[Chunk]):
         hybrid = LocalHybrid(BM25(chunks), dense)
         hybrid.name = name
         return hybrid
-    from reglens.retrieval.azure import ModelEmbedder
-
-    emb = ModelEmbedder(ModelSettings.from_env())
-    cache = ROOT / "data" / "processed" / f"embeddings_{emb.deployment}.npz"
-    if name == "dense":
-        return Dense(chunks, emb, cache)
-    if name == "hybrid":
-        return LocalHybrid(BM25(chunks), Dense(chunks, emb, cache))
-    if name == "azure_hybrid":
-        from reglens.config import AzureSearchSettings
-        from reglens.retrieval.azure import AzureHybrid
-
-        return AzureHybrid(AzureSearchSettings.from_env(), emb, chunks)
-    raise ValueError(name)
+    raise ValueError(f"unknown retriever {name!r}")
 
 
 def _write(kind: str, rows: list[dict], summary: dict, report: str) -> Path:
@@ -233,7 +221,7 @@ def eval_answers(configs: list[str], retriever_name: str = "dense_bge", repeats:
             "repeats": repeats,
             "provider": s.provider,
             "chat_deployment": s.chat_deployment,
-            "embedding_deployment": s.embedding_deployment,
+            "embeddings": "bge-small-en-v1.5 (local)",
             "api_version": s.api_version,
             "prices_per_m": [s.price_input_per_m, s.price_output_per_m],
             "usd_cap": ledger.usd_cap,
@@ -359,7 +347,7 @@ def render(summary: dict) -> str:
     lines = [
         "# Answer evaluation",
         "",
-        f"Model `{p.get('chat_deployment')}`, embeddings `{p.get('embedding_deployment')}`, retriever "
+        f"Model `{p.get('chat_deployment')}`, embeddings `{p.get('embeddings')}`, retriever "
         f"`{p.get('retriever')}` (k={p.get('k')}), prompt `{p.get('prompt_version')}`, repeats {p.get('repeats')}.",
         f"Corpus manifest sha256 `{str(p.get('corpus_manifest_sha256'))[:12]}`, golden sha256 "
         f"`{str(p.get('golden_sha256'))[:12]}`, commit `{p.get('git_commit')}`.",

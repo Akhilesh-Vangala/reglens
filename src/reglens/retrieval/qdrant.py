@@ -25,8 +25,10 @@ class QdrantDense:
 
         self.dense, self.collection, self.exact = dense, collection, exact
         self.client = QdrantClient(url=url) if url else QdrantClient(path=path) if path else QdrantClient(":memory:")
+        self.remote = bool(url)
         self.by_id = {c.id: c for c in dense.chunks}
         self.name = "qdrant_bge_exact" if exact else "qdrant_bge"
+        self.supports_filters = True
         self._ensure()
 
     def _ensure(self) -> None:
@@ -44,8 +46,9 @@ class QdrantDense:
             vectors_config=m.VectorParams(size=dims, distance=m.Distance.COSINE),
             hnsw_config=m.HnswConfigDiff(m=16, ef_construct=128),
         )
-        for field in ("part", "kind"):
-            self.client.create_payload_index(self.collection, field, m.PayloadSchemaType.KEYWORD)
+        if self.remote:  # payload indexes exist only on a server; embedded mode filters by scan
+            for field in ("part", "kind"):
+                self.client.create_payload_index(self.collection, field, m.PayloadSchemaType.KEYWORD)
         for start in range(0, n, 512):
             chunk_slice = self.dense.chunks[start : start + 512]
             self.client.upsert(
@@ -72,7 +75,7 @@ class QdrantDense:
             query=(q / np.linalg.norm(q)).tolist(),
             limit=k,
             query_filter=m.Filter(must=must) if must else None,
-            search_params=m.SearchParams(exact=self.exact, hnsw_ef=128),
+            search_params=m.SearchParams(exact=self.exact, hnsw_ef=128) if self.remote else None,  # embedded is exact
         ).points
         return [Hit(self.by_id[p.payload["chunk_id"]], float(p.score), {"qdrant": r + 1}) for r, p in enumerate(res)]
 

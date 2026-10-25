@@ -64,7 +64,9 @@ class SpendLedger:
     def admit(self, estimated_input_tokens: int, estimated_usd: float | None) -> None:
         if estimated_input_tokens > self.max_tokens:
             raise BudgetExceeded(f"request of ~{estimated_input_tokens} tokens exceeds cap {self.max_tokens}")
-        if self.usd_cap is not None and estimated_usd is not None and self.state["usd"] + estimated_usd > self.usd_cap:
+        with self.lock:
+            spent = self.state["usd"]
+        if self.usd_cap is not None and estimated_usd is not None and spent + estimated_usd > self.usd_cap:
             raise BudgetExceeded(f"cumulative spend cap ${self.usd_cap:.2f} would be exceeded")
 
     def record(self, input_tokens: int, output_tokens: int, usd: float | None) -> None:

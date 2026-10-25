@@ -1,17 +1,27 @@
-.PHONY: install build test index eval-retrieval eval-retrieval-azure eval-answers serve
+.PHONY: install test lint build stores eval-retrieval eval-stores eval-answers eval-copilot serve compose kind
 install:
 	python -m pip install -e ".[dev,serve]"
-build:
-	reglens build
+lint:
+	ruff check src tests api && ruff format --check src tests api
 test:
 	pytest -q
-index:
-	reglens index
+build:            ## fetch the pinned eCFR text, parse, chunk
+	reglens build
+stores:           ## load the citation graph into Neo4j and vectors into Qdrant
+	reglens load-stores
 eval-retrieval:
-	reglens eval retrieval --retrievers bm25 dense_bge hybrid_bge dense_bge+rerank hybrid_bge+rerank
-eval-retrieval-azure:
-	reglens eval retrieval --retrievers dense hybrid azure_hybrid
+	reglens eval retrieval --retrievers bm25 dense_bge hybrid_bge dense_bge+rerank graph_bge_s1
+eval-stores:
+	reglens eval stores
+eval-answers:     ## needs a model key; prints the upper bound first
+	reglens eval answers --dry-run --repeats 3 && reglens eval answers --repeats 3
+eval-copilot:
+	reglens eval copilot --dry-run && reglens eval copilot
 serve:
 	reglens-serve
-eval-answers:
-	reglens eval answers --configs A_closed_book B_rag_no_verify C_rag_verified
+compose:
+	docker compose up --build
+kind:             ## local Kubernetes: cluster, image, manifests, smoke test
+	kind create cluster --name reglens || true
+	docker build -t reglens:local . && kind load docker-image reglens:local --name reglens
+	kubectl apply -k deploy/k8s && deploy/k8s/smoke.sh

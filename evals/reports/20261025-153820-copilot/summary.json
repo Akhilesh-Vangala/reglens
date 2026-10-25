@@ -1,0 +1,66 @@
+{
+  "stopped": null,
+  "cases": 30,
+  "case_type_accuracy": {
+    "mean": 0.967,
+    "ci95": [
+      0.9,
+      1.0
+    ],
+    "n": 30
+  },
+  "calculator_called": {
+    "mean": 1.0,
+    "ci95": [
+      1.0,
+      1.0
+    ],
+    "n": 24
+  },
+  "deadlines_correct": {
+    "mean": 1.0,
+    "ci95": [
+      1.0,
+      1.0
+    ],
+    "n": 24
+  },
+  "handoff_correct": {
+    "mean": 0.933,
+    "ci95": [
+      0.833,
+      1.0
+    ],
+    "n": 30
+  },
+  "reply_released": {
+    "mean": 0.926,
+    "ci95": [
+      0.815,
+      1.0
+    ],
+    "n": 27
+  },
+  "unsupported_claim_rate_drafted": 0.037,
+  "unsupported_claims_shown": 0,
+  "cost_usd_per_case": 0.00325,
+  "latency_s_median": 13.739999999999998,
+  "spend_ledger": {
+    "usd": 0.17421,
+    "input_tokens": 882265,
+    "output_tokens": 171977,
+    "calls": 173
+  },
+  "provenance": {
+    "corpus_manifest_sha256": "d2b04018c22781630d1757c2fdb147bba7529080182b36e9c0e0bc187401aa0e",
+    "golden_sha256": "990e2287b30b88781a6723205cbd9e8fd002366f799fcfcf991e1ea2b6c52417",
+    "prompt_version": "rag-v2",
+    "git_commit": "d979bfc",
+    "started_at": "2026-10-25T19:38:20Z",
+    "kind": "copilot",
+    "repeats": 3,
+    "provider": "anthropic",
+    "chat_deployment": "claude-haiku-5-5",
+    "retriever": "dense_bge"
+  }
+}

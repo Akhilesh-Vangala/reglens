@@ -1,0 +1,38 @@
+{
+  "provenance": {
+    "corpus_manifest_sha256": "d2b04018c22781630d1757c2fdb147bba7529080182b36e9c0e0bc187401aa0e",
+    "golden_sha256": "990e2287b30b88781a6723205cbd9e8fd002366f799fcfcf991e1ea2b6c52417",
+    "prompt_version": "rag-v1",
+    "git_commit": "173e75f",
+    "started_at": "2026-10-25T18:24:41Z",
+    "kind": "stores",
+    "k": 8
+  },
+  "qdrant": {
+    "points": 2495,
+    "dims": 384,
+    "index_build_s": 1.08,
+    "exact_top_k_identical": "43/43",
+    "hnsw_recall_at_k_vs_exact": 1.0,
+    "p50_ms": {
+      "numpy": 6.69,
+      "qdrant_hnsw": 10.56
+    }
+  },
+  "neo4j": {
+    "nodes": 2371,
+    "edges": 2276,
+    "load_s": 0.78,
+    "graph_stats": {
+      "nodes": 2371,
+      "edges": 2276,
+      "by_type": {
+        "CITES": 1545,
+        "INTERPRETS": 731
+      },
+      "unresolved_refs": 87
+    },
+    "neighbor_mismatches": 0,
+    "nodes_checked": 2371
+  }
+}

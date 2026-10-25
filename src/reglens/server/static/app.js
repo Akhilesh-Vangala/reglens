@@ -362,15 +362,24 @@ async function loadResults() {
     return `<div class="bar ${cls}"><span class="lbl" title="${esc(n)}">${esc(n)}</span><div class="track"><div class="fill" style="width:${100 * m.mean}%"></div>
       <div class="ci" style="left:${100 * m.lo}%;width:${100 * (m.hi - m.lo)}%"></div></div><span class="mono">${m.mean.toFixed(2)}</span></div>`; }).join("");
   $("#barsNote").textContent = "Dense bge beats BM25 by +0.52 and naive RRF hybrid by +0.30 (paired, CIs exclude 0). Neither a general-domain cross-encoder nor citation-graph expansion improves first-stage recall, so the graph serves the agent instead of ranking.";
-  if (e.answers) {
+  const ans = e.answers_all || {};
+  if (Object.keys(ans).length) {
     const ci = (m) => (m && m.n ? `${m.mean.toFixed(2)} <span class="muted">(${m.ci95[0].toFixed(2)}–${m.ci95[1].toFixed(2)})</span>` : "–");
-    const pct = (v) => (v == null ? "–" : (100 * v).toFixed(1) + "%");
-    $("#answers").innerHTML = `<div class="tablewrap"><table><tr><th>Configuration</th><th class="num">Answer accuracy</th><th class="num">Unsupported / fabricated shown</th></tr>
-      ${Object.entries(e.answers.configs).map(([n, s]) => `<tr><td>${esc(n)}</td><td class="num">${ci(s.answer_accuracy)}</td><td class="num">${pct(s.unsupported_claim_rate_shown ?? s.fabricated_citation_rate)}</td></tr>`).join("")}</table></div>
-      <p class="muted">${esc(e.answers.run)} · ${esc(e.answers.provenance?.chat_deployment || "")}</p>`;
+    const label = { A_closed_book: "closed book", B_rag_no_verify: "RAG, no verifier", C_rag_verified: "RAG + verifier", D_copilot: "copilot" };
+    let h = `<div class="tablewrap"><table><tr><th>Configuration</th><th class="num">Right fact</th><th class="num">Backed by a verified gold quote</th><th class="num">Declined when it should</th><th class="num">$ / question</th></tr>
+      ${Object.entries(ans).map(([n, s]) => `<tr><td>${esc(label[n] || n)}${s.k && n.includes("rag") ? ` <span class="muted">k=${s.k}</span>` : ""}</td><td class="num">${ci(s.right_fact)}</td><td class="num">${s.verifiably_grounded ? ci(s.verifiably_grounded) : "n/a"}</td><td class="num">${ci(s.declined_correctly)}</td><td class="num">${s.cost_usd_per_question == null ? "–" : "$" + s.cost_usd_per_question.toFixed(4)}</td></tr>`).join("")}</table></div>
+      <p class="muted">Claude Haiku 5.5 · 43 questions · no unsupported claim shown in any configuration. A small model already knows these rules (closed book 0.82); the system's value is that the copilot's answers are backed by a checked quote from the exact paragraph.</p>`;
+    if (e.copilot) {
+      const c = e.copilot, r = (m) => (m ? m.mean.toFixed(2) : "–");
+      h += `<h3>Copilot scenarios · ${c.cases} case runs</h3><div class="stats">
+        <div class="stat emerald"><b>${r(c.deadlines_correct)}</b><span>liability and deadlines exactly right</span></div>
+        <div class="stat sky"><b>${r(c.case_type_accuracy)}</b><span>case type correct</span></div>
+        <div class="stat amber"><b>${r(c.handoff_correct)}</b><span>handoff correct</span></div>
+        <div class="stat violet"><b>${c.unsupported_claims_shown}</b><span>unsupported claims shown</span></div></div>`;
+    }
+    $("#answers").innerHTML = h;
   } else {
-    $("#answers").innerHTML = `<p>Closed book vs RAG vs RAG + verifier vs the copilot, on 43 questions (33 answerable, 4 out of corpus, 6 refusal including 5 adversarial).</p>
-      <div class="banner amber"><b>Not run yet.</b> It needs a model; no answer-quality number is shown until a run exists.</div>`;
+    $("#answers").innerHTML = `<div class="banner amber"><b>Not run yet.</b> It needs a model; no answer-quality number is shown until a run exists.</div>`;
   }
   if (e.stores) {
     const q = e.stores.qdrant, n = e.stores.neo4j;

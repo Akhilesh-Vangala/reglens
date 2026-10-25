@@ -496,6 +496,13 @@ def evals():
                     for name, m in s["retrievers"].items():
                         merged.setdefault(name, {"run": d.name, **m})
         out["retrieval_all"] = merged
+    answers: dict = {}  # newest result per answer configuration, each with the run it came from
+    for d in runs:
+        if d.name.endswith("-answers") and (d / "summary.json").exists():
+            s_ = json.loads((d / "summary.json").read_text())
+            for name, m in s_["configs"].items():
+                answers.setdefault(name, {"run": d.name, "k": s_.get("provenance", {}).get("k"), **m})
+    out["answers_all"] = dict(sorted(answers.items()))
     return out
 
 

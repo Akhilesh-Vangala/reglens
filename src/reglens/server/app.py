@@ -355,11 +355,24 @@ def ask(req: AskRequest, request: Request):
 
 @app.get("/api/evals")
 def evals():
-    out = {}
-    for d in sorted(REPORTS.glob("*"), reverse=True):
+    """Latest report per kind, plus every retriever's most recent result measured on the current golden set
+    (ablations run at different times are only comparable when the golden set hash matches)."""
+    out: dict = {}
+    runs = sorted(REPORTS.glob("*"), reverse=True)
+    for d in runs:
         kind = d.name.split("-", 2)[-1]
         if kind not in out and (d / "summary.json").exists():
             out[kind] = {"run": d.name, **json.loads((d / "summary.json").read_text())}
+    if "retrieval" in out:
+        golden = out["retrieval"]["provenance"]["golden_sha256"]
+        merged: dict = {}
+        for d in runs:
+            if d.name.endswith("-retrieval") and (d / "summary.json").exists():
+                s = json.loads((d / "summary.json").read_text())
+                if s["provenance"]["golden_sha256"] == golden:
+                    for name, m in s["retrievers"].items():
+                        merged.setdefault(name, {"run": d.name, **m})
+        out["retrieval_all"] = merged
     return out
 
 

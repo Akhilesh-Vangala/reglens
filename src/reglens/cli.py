@@ -28,7 +28,7 @@ def main() -> None:
     a.add_argument("question")
     a.add_argument("--retriever", default="dense_bge")
     e = sub.add_parser("eval")
-    e.add_argument("kind", choices=["retrieval", "answers"])
+    e.add_argument("kind", choices=["retrieval", "answers", "stores"])
     e.add_argument("--retrievers", nargs="+", default=["bm25", "dense_bge", "hybrid_bge", "dense_bge+rerank"])
     e.add_argument("--configs", nargs="+", default=["A_closed_book", "B_rag_no_verify", "C_rag_verified"])
     e.add_argument("--retriever", default="dense_bge")
@@ -88,6 +88,10 @@ def main() -> None:
 
         if args.kind == "retrieval":
             eval_retrieval(args.retrievers)
+        elif args.kind == "stores":
+            from reglens.eval.run import eval_stores
+
+            eval_stores()
         else:
             if args.dry_run:
                 from reglens.eval.run import estimate_answers

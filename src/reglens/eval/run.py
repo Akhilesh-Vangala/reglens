@@ -398,3 +398,71 @@ def render(summary: dict) -> str:
         "Grading is deterministic: regexes, citation prefixes and the verifier; no LLM judge.",
     ]
     return "\n".join(lines) + "\n"
+
+
+def eval_stores(k: int = 8) -> Path:
+    """Hold the Qdrant and Neo4j backends to the in-memory reference implementations on the pinned corpus.
+    Needs QDRANT_URL and NEO4J_URI/NEO4J_PASSWORD (docker compose or the Kubernetes manifests)."""
+    from reglens.kg import build_graph
+    from reglens.kg.neo4j_store import Neo4jGraph
+    from reglens.retrieval.qdrant import QdrantDense
+
+    chunks, golden = load_chunks(CHUNKS), load_golden()
+    dense = make_retriever("dense_bge", chunks)
+    import os
+
+    url = os.environ["QDRANT_URL"]
+    t0 = time.perf_counter()
+    hnsw = QdrantDense(dense, "reglens_eval_stores", url=url)
+    build_s = time.perf_counter() - t0
+    exact = QdrantDense(dense, "reglens_eval_stores", url=url, exact=True)
+    identical, overlap, lat = 0, [], {"numpy": [], "qdrant_hnsw": []}
+    for g in golden:
+        t = time.perf_counter()
+        ref = [h.chunk.id for h in dense.search(g["question"], k)]
+        lat["numpy"].append(1000 * (time.perf_counter() - t))
+        t = time.perf_counter()
+        got = [h.chunk.id for h in hnsw.search(g["question"], k)]
+        lat["qdrant_hnsw"].append(1000 * (time.perf_counter() - t))
+        identical += ref == [h.chunk.id for h in exact.search(g["question"], k)]
+        overlap.append(len(set(ref) & set(got)) / k)
+    graph = build_graph(chunks)
+    neo = Neo4jGraph.from_env()
+    t0 = time.perf_counter()
+    loaded = neo.load(graph)
+    load_s = time.perf_counter() - t0
+    mismatches = [c for c in graph.chunks_by_citation if neo.neighbors(c) != graph.neighbors(c)]
+    neo.close()
+    summary = {
+        "provenance": provenance({"kind": "stores", "k": k}),
+        "qdrant": {
+            "points": len(chunks),
+            "dims": int(dense.matrix.shape[1]),
+            "index_build_s": round(build_s, 2),
+            "exact_top_k_identical": f"{identical}/{len(golden)}",
+            "hnsw_recall_at_k_vs_exact": round(statistics.fmean(overlap), 4),
+            "p50_ms": {n: round(statistics.median(v), 2) for n, v in lat.items()},
+        },
+        "neo4j": {
+            **loaded,
+            "load_s": round(load_s, 2),
+            "graph_stats": graph.stats(),
+            "neighbor_mismatches": len(mismatches),
+            "nodes_checked": len(graph.chunks_by_citation),
+        },
+    }
+    q = summary["qdrant"]
+    report = "\n".join(
+        [
+            "# Store parity",
+            "",
+            f"Qdrant: {q['points']} points x {q['dims']} dims; exact top-{k} identical to numpy on "
+            f"{q['exact_top_k_identical']} golden queries; HNSW recall@{k} vs exact {q['hnsw_recall_at_k_vs_exact']}.",
+            f"Neo4j: {loaded['nodes']} nodes, {loaded['edges']} edges; neighbor mismatches vs in-memory: "
+            f"{len(mismatches)} of {len(graph.chunks_by_citation)}.",
+            "",
+        ]
+    )
+    out = _write("stores", [], summary, report)
+    print(report)
+    return out

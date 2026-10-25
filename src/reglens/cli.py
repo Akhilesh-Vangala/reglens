@@ -24,6 +24,7 @@ def main() -> None:
     b.add_argument("--as-of", default="2026-10-02")
     b.add_argument("--refetch", action="store_true")
     sub.add_parser("index")
+    sub.add_parser("load-stores", help="load the citation graph into Neo4j and the vectors into Qdrant")
     a = sub.add_parser("ask")
     a.add_argument("question")
     a.add_argument("--retriever", default="dense_bge")
@@ -59,6 +60,19 @@ def main() -> None:
                 }
             )
         )
+    elif args.cmd == "load-stores":
+        from reglens.eval.run import make_retriever
+        from reglens.kg import build_graph
+        from reglens.kg.neo4j_store import Neo4jGraph
+        from reglens.retrieval import load_chunks
+
+        chunks = load_chunks(ROOT / "data" / "processed" / "chunks.jsonl")
+        neo = Neo4jGraph.from_env()
+        loaded = neo.load(build_graph(chunks))
+        neo.close()
+        q = make_retriever("qdrant_bge", chunks)
+        points = q.client.count(q.collection, exact=True).count
+        print(json.dumps({"neo4j": loaded, "qdrant": {"collection": q.collection, "points": points}}))
     elif args.cmd == "ask":
         from reglens.config import ModelSettings
         from reglens.eval.run import make_retriever

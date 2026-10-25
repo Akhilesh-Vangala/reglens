@@ -72,8 +72,12 @@ def model_status() -> dict:
 @lru_cache(maxsize=1)
 def graph():
     from reglens.kg import build_graph
+    from reglens.kg.neo4j_store import GraphService
 
-    return build_graph(list(corpus().values()))
+    return GraphService(build_graph(list(corpus().values())))
+
+
+DEFAULT_RETRIEVER = os.getenv("REGLENS_RETRIEVER", "dense_bge")  # qdrant_bge in Kubernetes
 
 
 @lru_cache(maxsize=1)
@@ -128,6 +132,11 @@ def _hit(h, rank: int) -> dict:
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True, "chunks": len(corpus()), "graph_backend": graph().backend, "retriever": DEFAULT_RETRIEVER}
 
 
 @app.get("/api/meta")
@@ -236,7 +245,7 @@ def copilot(req: CopilotRequest, request: Request):
 
     day, reserved, s = _admit(request, MAX_STEPS, 12_000, 4_000)
     app_ = build_copilot(
-        retriever("dense_bge"),
+        retriever(DEFAULT_RETRIEVER),
         graph(),
         corpus(),
         chat_model(s),
@@ -261,7 +270,7 @@ def copilot(req: CopilotRequest, request: Request):
 
 
 @app.get("/api/search")
-def search(q: str, k: int = 8, retriever_name: str = "dense_bge"):
+def search(q: str, k: int = 8, retriever_name: str = DEFAULT_RETRIEVER):
     r = redact(q)
     t0 = time.perf_counter()
     try:
@@ -287,7 +296,7 @@ def chunk(chunk_id: str):
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
-    retriever: str = "dense_bge"  # best measured retriever (evals/reports, recall@5 0.76)
+    retriever: str = DEFAULT_RETRIEVER  # dense bge: best measured retriever (evals/reports, recall@5 0.76)
     k: int = Field(default=8, ge=1, le=20)
 
 

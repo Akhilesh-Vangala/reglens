@@ -1,10 +1,20 @@
 # RegLens
 
-Governed retrieval-augmented answers about consumer-banking regulations, for member-service staff.
+A member-service copilot for credit-union staff, grounded in federal consumer-banking regulations.
 
-**Live demo: https://reglens-blush.vercel.app** (semantic search and provenance work without keys; answering is enabled when a model key is configured).
+**Live demo: https://reglens-blush.vercel.app**. The deadline calculator, the "try to fool the checker" panel, semantic search and the citation-graph explorer all run with no key. Copilot answering turns on once a model key and the rate limiter are configured.
 
-A member asks "my debit card was stolen and I called this morning, what's the most I could lose?". RegLens answers only from the regulation text: every sentence carries a citation and a verbatim quote, and deterministic code checks both before anything is shown. A claim that can't be verified is removed. An answer left with nothing verified goes to a person, not to the member.
+A representative pastes what a member said: "my debit card was stolen Tuesday, I called the next morning, there's a $400 charge I didn't make". The copilot:
+- classifies the case
+- searches the regulations, then follows the citation graph to the Official Interpretations
+- computes the member's actual deadlines and liability cap
+- drafts a reply and opens a handoff ticket
+
+**The model proposes; deterministic code decides what reaches the member:**
+- **Claims:** every claim must be a verbatim quote from a passage a tool returned in this session.
+- **Dates:** every date must come from the calculator.
+- **Disputes:** these always create a ticket.
+- **Anything unsupported** is withheld and routed to a person.
 
 **Corpus.** Pinned eCFR text as of 2026-10-02, with a SHA-256 for every source file:
 - Regulation E (12 CFR 1005)
@@ -12,25 +22,35 @@ A member asks "my debit card was stolen and I called this morning, what's the mo
 - Regulation CC (12 CFR 229)
 - Regulation Z §§1026.12–1026.13
 
-That's 2,371 paragraphs, including Official Interpretations, in 2,495 citation-addressed chunks.
+That's 2,371 paragraphs, including Official Interpretations, in 2,495 citation-addressed chunks. They are linked by a citation graph of 2,276 edges.
 
 ```mermaid
 flowchart LR
-  Q[Member question] --> G[guard<br/>mask SSN, card, account,<br/>email, phone]
-  G --> R[retrieve<br/>bge-small dense, k=8]
-  R --> L[generate<br/>LLM, temp 0,<br/>strict JSON schema]
-  L --> V{verify<br/>quote verbatim in a<br/>retrieved passage?}
-  V -- some fail, 1st try --> L
-  V -- all pass / retried --> F[finalize<br/>drop unverified claims;<br/>none left → human review]
-  F --> A[Answer + citations<br/>+ trace]
-  S[(spend ledger<br/>token + USD caps)] -.admit / refuse.-> L
+  C[Member case] --> G[guard<br/>mask SSN, card,<br/>account, email, phone]
+  G --> A[agent<br/>LangGraph, tool calling]
+  A <--> T[tools]
+  T --- S1[search_regulations<br/>bge dense · Qdrant]
+  T --- S2[related_paragraphs<br/>citation graph · Neo4j]
+  T --- S3[compute_deadlines<br/>Reg E / Reg Z calculator]
+  A --> F{finalize<br/>quotes verbatim in<br/>a returned passage?<br/>dates from calculator?}
+  F -->|verified| R[reply + citations<br/>+ deadlines + ticket]
+  F -->|unsupported| H[withheld → specialist]
+  L[(spend ledger · Redis rate limit<br/>+ daily cap)] -.admit / refuse.-> A
 ```
+
+A second, fixed pipeline (guard → retrieve → generate → verify → one retry → finalize) answers single questions. It is the system under test in the hallucination evaluation.
 
 ## What is measured
 
+Every report under [evals/reports/](evals/reports/) records:
+- the corpus manifest hash
+- the golden-set hash
+- the prompt version
+- the git commit
+
 ### Retrieval
 
-Measured on 33 answerable golden questions at k=8, with 95% bootstrap CIs over questions. Source report: [evals/reports/](evals/reports/).
+Measured on 33 answerable golden questions at k=8, with 95% bootstrap CIs over questions.
 
 | Retriever | Recall@1 | Recall@5 | Recall@8 | MRR |
 |---|---|---|---|---|
@@ -38,11 +58,22 @@ Measured on 33 answerable golden questions at k=8, with 95% bootstrap CIs over q
 | **Dense, bge-small-en-v1.5** | **0.48** | **0.76 (0.61–0.88)** | **0.85** | **0.60** |
 | Hybrid BM25 + dense, RRF c=60 | 0.27 | 0.46 (0.27–0.64) | 0.61 | 0.36 |
 | Dense + MS-MARCO cross-encoder rerank | 0.39 | 0.67 (0.52–0.82) | 0.82 | 0.52 |
+| Dense + citation-graph expansion (1 seed) | 0.48 | 0.70 (0.55–0.85) | 0.82 | 0.58 |
 
-The obvious default would have been wrong:
-- **Hybrid underperforms dense alone.** Paired recall@5 is −0.30, with a 95% CI of [−0.45, −0.15]. Members write "credit union" and "debit card"; the regulation says "financial institution" and "access device". BM25 therefore ranks Regulation Z credit-card commentary first, and RRF gives that noise equal weight.
-- **The general-domain reranker doesn't help either** (−0.09, CI includes 0). The service therefore defaults to dense retrieval.
-- **These conclusions are drawn on a small, author-written set** (see Limitations). Azure AI Search hybrid (`azure_hybrid`) is implemented for the production path, but it hasn't been measured yet.
+The obvious defaults would have been wrong:
+- **Hybrid underperforms dense alone.** Paired recall@5 is −0.30, 95% CI [−0.45, −0.15]. Members write "credit union" and "debit card"; the regulation says "financial institution" and "access device". BM25 therefore ranks Regulation Z credit-card commentary first, and RRF gives that noise equal weight.
+- **Neither a general-domain reranker nor graph expansion improves first-stage recall** (−0.09 and −0.06; both CIs include 0). Dense search usually finds the gold paragraph already, and expansion pushes direct hits out of the top k. The graph is therefore an *agent tool*: open a rule's Official Interpretation, follow a cross-reference. It is not a ranking signal.
+- **These conclusions come from a small, author-written set** (see Limitations).
+
+### Stores
+
+`reglens eval stores` checks each backend against the in-memory reference implementation, using the live servers.
+
+| Backend | Check | Result |
+|---|---|---|
+| Qdrant 1.20 (2,495 × 384, HNSW m=16) | exact search top-8 identical to numpy | 43/43 golden queries |
+| | HNSW recall@8 vs exact | 1.00 |
+| Neo4j 5.26 (2,371 nodes, 2,276 relationships) | neighbors identical to in-memory graph | 2,371/2,371 nodes |
 
 ### Answers
 
@@ -51,31 +82,50 @@ The obvious default would have been wrong:
 - **B**, RAG without the verifier
 - **C**, RAG with the verifier
 
-The 43 questions split into 33 answerable, 4 out of corpus and 6 that should be refused, including prompt-injection, PII-laden, system-prompt-extraction and false-premise items.
+The 43 questions split into 33 answerable, 4 out of corpus and 6 that should be refused. Five are adversarial: prompt injection, PII-laden, system-prompt extraction, role-played legal advice and a false premise.
 
 Metrics:
 - answer accuracy: correct status, plus the required fact, plus a verified claim citing a gold paragraph
 - unsupported-claim rate before and after the verifier
 - fabricated-citation rate for the closed-book configuration
 - refusal, out-of-corpus and escalation accuracy
-- tokens, latency and cost per question
+- tokens, latency and cost
 - paired deltas between configurations
 
-*This run needs model credentials and has not been run yet; no answer-quality numbers are claimed until it has.*
+*This needs a model run and has not been run yet. No answer-quality numbers are claimed until it has.* Every gold fact is checked against the regulation text in CI (`tests/test_golden.py`), so if the law changes, the labels fail before any model call does.
 
-Every gold fact is checked against the regulation text in CI (`tests/test_golden.py`). If the law changes, the labels fail before any model call does.
+## Deterministic components
+
+**Deadline calculator** (`timeline.py`) covers:
+- Reg E unauthorized-transfer liability: $50 within two business days, up to $500 after that, and the 60-day statement rule
+- Reg E error-resolution deadlines: 10/20 business days, 45/90 days, provisional credit
+- Reg Z billing-error windows and the $50 card-liability cap
+
+It runs on a Federal Reserve business-day calendar. Every rule carries a verbatim quote, and a test checks each quote against the pinned regulation. Results that depend on facts the institution must establish are reported as maximums, never as decisions.
+
+**Citation graph** (`kg/`) has two edge types, both parsed from the text and citation scheme, never by a model:
+- **INTERPRETS:** comment → rule
+- **CITES:** "§ 1005.11(c)(2)", "paragraph (b)(1) of this section", "comment 18(b)(2)-2"
+
+A heading-only paragraph resolves to its first child. 87 references point outside the corpus; they are counted, not guessed.
+
+**Verifier** (`verify.py`) accepts a claim only if:
+- its chunk was returned for this question
+- its quote is a verbatim substring of that passage after whitespace and quote-mark normalization
+- the quote is at least 25 characters
 
 ## Controls
 
 | Risk | Control | Where |
 |---|---|---|
-| Hallucinated rule, deadline or dollar amount | Claim kept only if its quote is a verbatim substring of a passage retrieved for this question; one retry with verifier feedback | `verify.py`, `graph.py` |
-| Citing a passage the model never saw | `not_retrieved` rejection even if the passage exists in the corpus | `verify.py` |
-| Live member problem (fraud, lost card, dispute) | `needs_human_review` flag; unverifiable answers are downgraded and routed to staff | `prompts.py`, `graph.py` |
-| PII in questions | Masked before retrieval, the model and traces; only counts are logged | `guard.py` |
-| Runaway cost | Per-request token cap and cumulative USD cap, checked *before* each call | `guard.py` |
-| Prompt injection via question or passage | Passages marked untrusted; verifier ignores model intent and checks text | `prompts.py`, golden A01–A05 |
-| Silent regression | Versioned prompt, corpus hash, golden hash and git commit in every report; CI runs tests and the offline retrieval eval | `eval/run.py`, `.github/workflows/ci.yml` |
+| Invented rule, deadline or amount | Verbatim-quote check against passages a tool returned; one retry with feedback; unverified claims dropped | `verify.py`, `graph.py`, `copilot.py` |
+| Model date arithmetic | Dates come only from the calculator; any other date in a reply withholds it | `timeline.py`, `copilot.py` |
+| Live member problem | Disputes and unauthorized use always produce a handoff ticket; unsupported replies withheld for a person | `copilot.py` |
+| PII in member text | SSN, card, account, email, phone masked before retrieval, model and traces | `guard.py` |
+| Cost | Every call admitted against its worst case before it is sent; hard USD cap across runs | `guard.py`, `generator.py` |
+| Abuse on a public URL | Per-IP hourly limit and global daily USD cap in Redis; fails closed without a durable store | `server/limits.py` |
+| Prompt injection | Member text and tool output treated as data; verifier checks text, not intent; adversarial golden items | `prompts.py`, `copilot.py` |
+| Regression | Hashes and commit in every report; CI runs lint, tests against real Qdrant and Neo4j, the offline eval, and a Kubernetes deploy with a smoke test | `eval/`, `.github/workflows/ci.yml` |
 | Observability | OpenTelemetry spans per step with `gen_ai.*` token attributes; JSONL locally, OTLP to any backend | `telemetry.py` |
 
 ## Run it
@@ -83,55 +133,59 @@ Every gold fact is checked against the regulation text in CI (`tests/test_golden
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev,serve]"
-pytest -q                                   # 68 tests, offline
-reglens eval retrieval                      # downloads bge-small (~130 MB) on first run
-reglens-serve                               # http://127.0.0.1:8000
+pytest -q                     # unit, golden, calculator, copilot, server; store tests need QDRANT_URL / NEO4J_URI
+reglens eval retrieval        # downloads bge-small on first run
+reglens-serve                 # http://127.0.0.1:8000
 ```
 
-**Without credentials**, the demo still runs retrieval over all retrievers, shows the pinned-corpus provenance and the measured results. `/api/ask` returns 503 with the missing setting.
+**Full stack (app + Qdrant + Neo4j + loader):** `docker compose up --build`
 
-**To enable answers**, copy `.env.example` to `.env` and pick a provider:
-- `LLM_PROVIDER=azure`: Azure OpenAI deployments, plus optional Azure AI Search for `reglens index`.
-- `LLM_PROVIDER=openai`: the OpenAI API or any OpenAI-compatible gateway.
+**Kubernetes:** see [deploy/k8s/](deploy/k8s/). It includes:
+- Qdrant and Neo4j StatefulSets with persistent volumes
+- an idempotent loader Job
+- the app Deployment: non-root, read-only root filesystem, startup/readiness/liveness probes, HPA, PDB
+- a NetworkPolicy so only RegLens pods reach the stores
 
-Model runs refuse to start without `REGLENS_USD_CAP` and `PRICE_*` per 1M tokens. Each call is admitted against its worst case (input plus the full output allowance) before it is sent, so a run stops before it can cross the cap. `reglens eval answers --dry-run` prints the upper-bound cost without calling a model. Then:
+```bash
+kind create cluster --name reglens
+docker build -t reglens:local . && kind load docker-image reglens:local --name reglens
+kubectl apply -k deploy/k8s && deploy/k8s/smoke.sh
+```
+
+**Model access.** Copy `.env.example` to `.env` and choose a provider:
+- `LLM_PROVIDER=anthropic` (Claude)
+- `azure` (Azure OpenAI)
+- `openai` (OpenAI or any compatible gateway)
+
+Model runs refuse to start without `REGLENS_USD_CAP` and `PRICE_*`. `reglens eval answers --dry-run` prints the upper-bound cost without calling a model.
 
 ```bash
 reglens ask "My debit card was stolen and I called this morning. What is the most I could lose?"
 reglens eval answers --repeats 3
 ```
 
-Docker:
-
-```bash
-docker build -t reglens . && docker run -p 8000:8000 --env-file .env reglens
-```
-
-Hosted demo (Hugging Face Docker Space; retrieval works without keys, answering needs a model secret):
-
-```bash
-hf auth login
-python scripts/deploy_space.py <hf-username>/reglens
-```
-
 ## Layout
 
 ```
 src/reglens/corpus/      eCFR fetch (hashed), paragraph parser (6-level CFR labels, interpretations), chunker
-src/reglens/retrieval/   BM25, dense, RRF hybrid, local bge + cross-encoder, Azure AI Search hybrid
-src/reglens/generation/  versioned prompts, Pydantic answer schema, LangChain structured-output client
-src/reglens/graph.py     LangGraph state machine: guard → retrieve → generate → verify → finalize
-src/reglens/verify.py    deterministic quote verifier
+src/reglens/retrieval/   BM25, dense, RRF hybrid, bge + cross-encoder, graph expansion, Qdrant, Azure AI Search
+src/reglens/kg/          citation graph; Neo4j store and GraphService
+src/reglens/timeline.py  Reg E / Reg Z deadline and liability calculator
+src/reglens/copilot.py   LangGraph tool-calling agent with deterministic finalize
+src/reglens/graph.py     LangGraph Q&A pipeline: guard → retrieve → generate → verify → finalize
+src/reglens/verify.py    verbatim quote verifier
 src/reglens/guard.py     PII masking, spend ledger
-src/reglens/eval/        golden-set runner, bootstrap CIs, paired deltas, reports
-src/reglens/server/      FastAPI service + single-page demo
+src/reglens/eval/        golden-set runner, bootstrap CIs, paired deltas, store parity, reports
+src/reglens/server/      FastAPI service, rate/spend limits, single-page demo
+deploy/k8s/              kustomize manifests + smoke test
 evals/golden.jsonl       43 labelled questions;  evals/reports/  every run, with provenance
 docs/MODEL_CARD.md       intended use, limits, evaluation, governance hooks
 ```
 
 ## Limitations
 
-- **The golden set is small and author-written.** 43 questions is enough to see large effects with CIs, not small ones, and nothing has been labelled by members or compliance staff. Choosing a retriever on the same set it is reported on is optimistic.
+- **The golden set is small and author-written.** 43 questions shows large effects with CIs, not small ones, and nothing has been labelled by members or compliance staff. Choosing a retriever on the same set it is reported on is optimistic.
 - **Exact-substring verification proves a quote exists, not that the claim interprets it correctly.** Human review remains the control for interpretation.
-- **The corpus is a point-in-time snapshot.** Paragraph structure is reconstructed from inline labels; two source anomalies are repaired and logged in `data/processed/corpus_stats.json`.
+- **The business-day calendar is an assumption.** It uses Federal Reserve holidays; Reg E defines business days by when the institution is open.
+- **The corpus is a point-in-time snapshot.** Two parser repairs are logged in `data/processed/corpus_stats.json`.
 - **This explains regulations; it does not decide a member's case.** Institution policies, rates and account data are out of scope by design.

@@ -70,3 +70,19 @@ class Neo4jGraph:
 
     def close(self) -> None:
         self.driver.close()
+
+
+class GraphService:
+    """What the server and copilot use: neighbor queries go to Neo4j when NEO4J_URI is set (Kubernetes /
+    docker compose), otherwise to the in-memory graph; chunk lookups always come from the in-memory corpus."""
+
+    def __init__(self, graph: CitationGraph):
+        self.graph, self.chunks_by_citation = graph, graph.chunks_by_citation
+        self.neo = Neo4jGraph.from_env() if os.getenv("NEO4J_URI") else None
+        self.backend = "neo4j" if self.neo else "memory"
+
+    def neighbors(self, citation: str) -> list[tuple[str, str, str]]:
+        return self.neo.neighbors(citation) if self.neo else self.graph.neighbors(citation)
+
+    def stats(self) -> dict:
+        return {**self.graph.stats(), "backend": self.backend}

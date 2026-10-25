@@ -1,0 +1,13 @@
+# The stores accept traffic only from RegLens pods (app and indexer); nothing else in the cluster can reach them.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: stores-from-reglens-only
+spec:
+  podSelector:
+    matchExpressions: [{key: app, operator: In, values: [qdrant, neo4j]}]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions: [{key: app, operator: In, values: [reglens, reglens-indexer]}]

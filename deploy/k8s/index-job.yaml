@@ -1,0 +1,25 @@
+# Loads the citation graph into Neo4j and the corpus vectors into Qdrant. Idempotent; rerun after a corpus rebuild.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: reglens-load-stores
+spec:
+  backoffLimit: 10  # retries while the stores are still starting
+  template:
+    metadata: {labels: {app: reglens-indexer}}
+    spec:
+      restartPolicy: OnFailure
+      enableServiceLinks: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: load
+          image: reglens
+          imagePullPolicy: IfNotPresent
+          command: ["reglens", "load-stores"]
+          envFrom: [{configMapRef: {name: reglens-config}}, {secretRef: {name: reglens-secrets}}]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources:
+            requests: {cpu: 200m, memory: 512Mi}
+            limits: {memory: 1536Mi}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]

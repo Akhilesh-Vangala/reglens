@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+spec:
+  selector: {app: neo4j}
+  ports: [{name: bolt, port: 7687, targetPort: 7687}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: neo4j
+spec:
+  serviceName: neo4j
+  replicas: 1
+  selector: {matchLabels: {app: neo4j}}
+  template:
+    metadata: {labels: {app: neo4j}}
+    spec:
+      # Service-link env vars (NEO4J_PORT_7687_TCP_...) would be parsed by the image as Neo4j settings
+      enableServiceLinks: false
+      containers:
+        - name: neo4j
+          image: neo4j:5.26
+          env:
+            - name: NEO4J_AUTH
+              valueFrom: {secretKeyRef: {name: reglens-secrets, key: NEO4J_AUTH}}
+            - {name: NEO4J_server_memory_heap_max__size, value: 512m}
+            - {name: NEO4J_server_memory_pagecache_size, value: 128m}
+          ports: [{containerPort: 7687}]
+          readinessProbe: {tcpSocket: {port: 7687}, initialDelaySeconds: 10, periodSeconds: 5}
+          resources:
+            requests: {cpu: 100m, memory: 768Mi}
+            limits: {memory: 1536Mi}
+          volumeMounts: [{name: data, mountPath: /data}]
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 2Gi}}}

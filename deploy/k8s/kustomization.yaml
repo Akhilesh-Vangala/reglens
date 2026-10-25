@@ -1,0 +1,33 @@
+# kubectl apply -k deploy/k8s   (namespace, stores, index job, app, autoscaling, network policy)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: reglens
+resources:
+  - namespace.yaml
+  - qdrant.yaml
+  - neo4j.yaml
+  - index-job.yaml
+  - app.yaml
+  - networkpolicy.yaml
+configMapGenerator:
+  - name: reglens-config
+    literals:
+      - REGLENS_RETRIEVER=qdrant_bge
+      - QDRANT_URL=http://qdrant:6333
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - REGLENS_STATE_DIR=/tmp/reglens
+secretGenerator:
+  # Development credentials for a local cluster. Production: replace with an external secret
+  # (e.g. Azure Key Vault via the Secrets Store CSI driver) and add model keys the same way.
+  - name: reglens-secrets
+    literals:
+      - NEO4J_PASSWORD=reglens-local-only
+      - NEO4J_AUTH=neo4j/reglens-local-only
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: reglens
+images:
+  - name: reglens
+    newName: reglens
+    newTag: local

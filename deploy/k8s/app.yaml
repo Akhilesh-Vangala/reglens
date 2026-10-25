@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: reglens
+spec:
+  selector: {app: reglens}
+  ports: [{name: http, port: 80, targetPort: 8000}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reglens
+spec:
+  replicas: 2
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app: reglens}}
+  template:
+    metadata: {labels: {app: reglens}}
+    spec:
+      enableServiceLinks: false
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      topologySpreadConstraints:
+        - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway,
+           labelSelector: {matchLabels: {app: reglens}}}
+      containers:
+        - name: reglens
+          image: reglens
+          imagePullPolicy: IfNotPresent
+          envFrom: [{configMapRef: {name: reglens-config}}, {secretRef: {name: reglens-secrets}}]
+          ports: [{containerPort: 8000}]
+          startupProbe: {httpGet: {path: /healthz, port: 8000}, periodSeconds: 3, failureThreshold: 40}
+          readinessProbe: {httpGet: {path: /healthz, port: 8000}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: 8000}, periodSeconds: 20, failureThreshold: 3}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources:
+            requests: {cpu: 250m, memory: 768Mi}
+            limits: {memory: 1536Mi}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: reglens
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: reglens}
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: reglens
+spec:
+  minAvailable: 1
+  selector: {matchLabels: {app: reglens}}

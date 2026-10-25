@@ -78,3 +78,19 @@ def test_anthropic_settings_and_client_construct_without_network(monkeypatch):
     s = ModelSettings.from_env()
     assert (s.provider, s.chat_deployment, s.embedding_deployment) == ("anthropic", "claude-haiku-5-5", "")
     assert ChatGenerator(s).model == "anthropic:claude-haiku-5-5"
+
+
+def test_budgeted_generator_stops_before_the_call_that_would_cross_the_cap(tmp_path):
+    from reglens.generation.generator import Budgeted
+    from reglens.generation.schema import Answer
+
+    good = ans([claim("a", "determine whether an error occurred within 10 business days")])
+    inner = ScriptedGenerator([good, good, good])
+    led = SpendLedger(tmp_path / "s.json", usd_cap=0.002)
+    # worst case per call: ~33 input tokens + 1,000 output tokens at $0.10/$0.50 per 1M -> ~$0.0005
+    gen = Budgeted(inner, led, 0.10, 0.50, max_out=1000)
+    gen.generate("x" * 100, Answer)
+    led.state["usd"] = 0.0019  # simulate earlier spend just under the cap
+    with pytest.raises(BudgetExceeded):
+        gen.generate("x" * 100, Answer)
+    assert len(inner.prompts) == 1  # the refused call never reached the model

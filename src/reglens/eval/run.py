@@ -146,18 +146,95 @@ def eval_retrieval(retriever_names: list[str], k: int = 8) -> Path:
     return out
 
 
+def budget_from_env(s: ModelSettings):
+    """Real-model runs must be capped: REGLENS_USD_CAP and both prices are required."""
+    import os
+
+    from reglens.config import STATE_DIR
+    from reglens.guard import SpendLedger
+
+    cap = os.getenv("REGLENS_USD_CAP")
+    if not cap or s.price_input_per_m is None or s.price_output_per_m is None:
+        raise RuntimeError("Set REGLENS_USD_CAP, PRICE_INPUT_PER_M and PRICE_OUTPUT_PER_M before any model run")
+    return SpendLedger(STATE_DIR / "spend.json", float(cap), max_tokens_per_request=60_000)
+
+
+def estimate_answers(configs: list[str], retriever_name: str = "dense_bge", repeats: int = 1, k: int = 8) -> dict:
+    """Upper-bound cost of an answer run without calling a model: real prompt lengths, every RAG question
+    assumed to need the verifier retry, every call assumed to use its full output allowance."""
+    from reglens.generation.prompts import POLICY, RAG_TEMPLATE, format_passages
+
+    s = ModelSettings.from_env()
+    chunks = load_chunks(CHUNKS)
+    retriever = make_retriever(retriever_name, chunks)
+    max_out = 8000 if s.provider == "anthropic" else 4000
+    tok_in = tok_out = calls = 0
+    for g in load_golden():
+        rag = RAG_TEMPLATE.format(
+            policy=POLICY,
+            passages=format_passages([h.chunk for h in retriever.search(g["question"], k)]),
+            question=g["question"],
+        )
+        closed = CLOSED_BOOK_TEMPLATE.format(policy_closed=POLICY_CLOSED, question=g["question"])
+        for cfg in configs:
+            n = 1 if cfg != "C_rag_verified" else 2
+            p = closed if cfg == "A_closed_book" else rag
+            tok_in += n * repeats * (len(p) // 3 + (600 if n == 2 else 0))
+            tok_out += n * repeats * max_out
+            calls += n * repeats
+    usd = (tok_in * s.price_input_per_m + tok_out * s.price_output_per_m) / 1e6 if s.price_input_per_m else None
+    return {
+        "model": s.chat_deployment,
+        "calls_max": calls,
+        "input_tokens_max": tok_in,
+        "output_tokens_max": tok_out,
+        "usd_upper_bound": round(usd, 2) if usd is not None else None,
+    }
+
+
 def eval_answers(configs: list[str], retriever_name: str = "dense_bge", repeats: int = 1, k: int = 8) -> Path:
-    from reglens.generation.generator import ChatGenerator
+    from reglens.generation.generator import Budgeted, ChatGenerator
     from reglens.graph import build_pipeline
+    from reglens.guard import BudgetExceeded
 
     s = ModelSettings.from_env()
     chunks = load_chunks(CHUNKS)
     corpus = {c.id: c for c in chunks}
     corpus_citations = {c.citation for c in chunks}
     golden = load_golden()
-    gen = ChatGenerator(s)
+    ledger = budget_from_env(s)
+    raw = ChatGenerator(s)
+    gen = Budgeted(raw, ledger, s.price_input_per_m, s.price_output_per_m, raw.max_output_tokens)
     retriever = make_retriever(retriever_name, chunks) if any(c != "A_closed_book" for c in configs) else None
-    rows = []
+    rows, stopped = [], None
+    try:
+        _answer_rows(configs, repeats, golden, gen, retriever, corpus, corpus_citations, k, s, rows, build_pipeline)
+    except BudgetExceeded as exc:
+        stopped = f"budget: {exc}"
+        print(f"STOPPED: {stopped}", flush=True)
+    summary = summarize(rows, [c for c in configs if any(r["config"] == c for r in rows)])
+    summary["stopped"] = stopped
+    summary["spend_ledger"] = dict(ledger.state)
+    summary["provenance"] = provenance(
+        {
+            "kind": "answers",
+            "retriever": retriever_name,
+            "k": k,
+            "repeats": repeats,
+            "provider": s.provider,
+            "chat_deployment": s.chat_deployment,
+            "embedding_deployment": s.embedding_deployment,
+            "api_version": s.api_version,
+            "prices_per_m": [s.price_input_per_m, s.price_output_per_m],
+            "usd_cap": ledger.usd_cap,
+        }
+    )
+    out = _write("answers", rows, summary, render(summary))
+    print(render(summary))
+    return out
+
+
+def _answer_rows(configs, repeats, golden, gen, retriever, corpus, corpus_citations, k, s, rows, build_pipeline):
     for cfg in configs:
         app = (
             None
@@ -205,21 +282,6 @@ def eval_answers(configs: list[str], retriever_name: str = "dense_bge", repeats:
                 )
                 correct = score.get("answer_correct", score["status_correct"])
                 print(f"[{cfg}] {g['id']} status={final.get('status')} correct={correct}", flush=True)
-    summary = summarize(rows, configs)
-    summary["provenance"] = provenance(
-        {
-            "kind": "answers",
-            "retriever": retriever_name,
-            "k": k,
-            "repeats": repeats,
-            "chat_deployment": s.chat_deployment,
-            "embedding_deployment": s.embedding_deployment,
-            "api_version": s.api_version,
-        }
-    )
-    out = _write("answers", rows, summary, render(summary))
-    print(render(summary))
-    return out
 
 
 def _mean_ci(vals: list[float]) -> dict:

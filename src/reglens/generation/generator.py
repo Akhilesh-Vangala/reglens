@@ -29,21 +29,28 @@ class Generator(Protocol):
 
 
 class ChatGenerator:
-    """LangChain AzureChatOpenAI / ChatOpenAI with strict JSON-schema structured output, temperature 0."""
+    """LangChain AzureChatOpenAI / ChatOpenAI / ChatAnthropic with JSON-schema structured output."""
 
     def __init__(self, s: ModelSettings, temperature: float = 0.0):
         from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
-        common = dict(temperature=temperature, max_retries=3, timeout=60, api_key=s.api_key)
+        common = dict(max_retries=3, timeout=60, api_key=s.api_key)
         if s.provider == "anthropic":
             from langchain_anthropic import ChatAnthropic
 
-            self.llm = ChatAnthropic(model=s.chat_deployment, max_tokens=2048, **common)
+            # The Claude API rejects sampling parameters (temperature/top_p/top_k) since 2026-10-21. Room is left
+            # for adaptive thinking, which counts toward max_tokens.
+            self.max_output_tokens = 8000
+            self.llm = ChatAnthropic(model=s.chat_deployment, max_tokens=self.max_output_tokens, **common)
         elif s.provider == "azure":
+            self.max_output_tokens = 4000
+            common["temperature"] = temperature
             self.llm = AzureChatOpenAI(
                 azure_endpoint=s.endpoint, api_version=s.api_version, azure_deployment=s.chat_deployment, **common
             )
         else:
+            self.max_output_tokens = 4000
+            common["temperature"] = temperature
             self.llm = ChatOpenAI(model=s.chat_deployment, base_url=s.endpoint or None, **common)
         self.model = f"{s.provider}:{s.chat_deployment}"
 
@@ -66,6 +73,31 @@ class ChatGenerator:
             error=None if parsed is not None else f"parse_error: {out.get('parsing_error')}"[:500],
             model=self.model,
         )
+
+
+class Budgeted:
+    """Wraps a generator with a hard spend cap. Every call is admitted against its worst case (estimated input
+    plus the full output allowance) before it is sent, and billed at measured usage after. Exceeding the cap
+    raises BudgetExceeded, which stops an evaluation run instead of quietly spending past the limit."""
+
+    def __init__(self, inner: Generator, ledger, price_in_per_m: float, price_out_per_m: float, max_out: int):
+        self.inner, self.ledger, self.p_in, self.p_out, self.max_out = (
+            inner,
+            ledger,
+            price_in_per_m,
+            price_out_per_m,
+            max_out,
+        )
+        self.model = inner.model
+
+    def generate(self, prompt: str, schema: type[BaseModel]) -> Generation:
+        est_in = len(prompt) // 3  # conservative: ~3 chars/token for legal English
+        self.ledger.admit(est_in, (est_in * self.p_in + self.max_out * self.p_out) / 1e6)
+        g = self.inner.generate(prompt, schema)
+        self.ledger.record(
+            g.input_tokens, g.output_tokens, (g.input_tokens * self.p_in + g.output_tokens * self.p_out) / 1e6
+        )
+        return g
 
 
 @dataclass

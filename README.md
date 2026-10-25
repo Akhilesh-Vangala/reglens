@@ -94,7 +94,7 @@ reglens-serve                               # http://127.0.0.1:8000
 - `LLM_PROVIDER=azure`: Azure OpenAI deployments, plus optional Azure AI Search for `reglens index`.
 - `LLM_PROVIDER=openai`: the OpenAI API or any OpenAI-compatible gateway.
 
-Optionally set `PRICE_*` per 1M tokens to get cost reporting and enforce `REGLENS_USD_CAP`. Then:
+Model runs refuse to start without `REGLENS_USD_CAP` and `PRICE_*` per 1M tokens. Each call is admitted against its worst case (input plus the full output allowance) before it is sent, so a run stops before it can cross the cap. `reglens eval answers --dry-run` prints the upper-bound cost without calling a model. Then:
 
 ```bash
 reglens ask "My debit card was stolen and I called this morning. What is the most I could lose?"

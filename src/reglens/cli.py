@@ -33,6 +33,7 @@ def main() -> None:
     e.add_argument("--configs", nargs="+", default=["A_closed_book", "B_rag_no_verify", "C_rag_verified"])
     e.add_argument("--retriever", default="dense_bge")
     e.add_argument("--repeats", type=int, default=1)
+    e.add_argument("--dry-run", action="store_true", help="answers: print the upper-bound cost, call no model")
     args = ap.parse_args()
 
     if args.cmd == "build":
@@ -69,7 +70,13 @@ def main() -> None:
         tracer(ROOT / "traces" / "spans.jsonl")
         chunks = load_chunks(ROOT / "data" / "processed" / "chunks.jsonl")
         corpus = {c.id: c for c in chunks}
-        app = build_pipeline(make_retriever(args.retriever, chunks), ChatGenerator(ModelSettings.from_env()), corpus)
+        from reglens.eval.run import budget_from_env
+        from reglens.generation.generator import Budgeted
+
+        s = ModelSettings.from_env()
+        raw = ChatGenerator(s)
+        gen = Budgeted(raw, budget_from_env(s), s.price_input_per_m, s.price_output_per_m, raw.max_output_tokens)
+        app = build_pipeline(make_retriever(args.retriever, chunks), gen, corpus)
         state = app.invoke({"question": args.question})
         final = state["final"]
         for c in final["claims"]:
@@ -82,7 +89,12 @@ def main() -> None:
         if args.kind == "retrieval":
             eval_retrieval(args.retrievers)
         else:
-            eval_answers(args.configs, args.retriever, args.repeats)
+            if args.dry_run:
+                from reglens.eval.run import estimate_answers
+
+                print(json.dumps(estimate_answers(args.configs, args.retriever, args.repeats), indent=2))
+            else:
+                eval_answers(args.configs, args.retriever, args.repeats)
 
 
 if __name__ == "__main__":
